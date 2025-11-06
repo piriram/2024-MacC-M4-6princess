@@ -26,8 +26,6 @@
 |  7  | 결과물 활용 제한              | 저장 및 SNS 공유로 확장된 팬활동 가능 |
 
 
----
-
 ## 주요 기능
 |   구분  | 기능명         | 주요 내용                                                                                                     |
 | :---: | :---------- | :-------------------------------------------------------------------------------------------------------- |
@@ -36,26 +34,34 @@
 | **3** | **편집 기능**   | - **밝기 / 채도 / 대비 조정**<br>- 스티커 및 텍스트 추가<br>- **드래그, 회전, 크기 조절 제스처 지원**<br>- 원본 / 수정본 비교 기능                |
 | **4** | **저장 및 관리** | - **Core Data 기반 로컬 저장소 관리**<br>- 프레임 목록 관리 (삭제 / 재편집)<br>- **고해상도 이미지 저장 및 공유**                          |
 
-
----
+--- 
 
 ## 💻 기술 스택
 
 ### Development
-- **Language**: Swift 5.9
-- **Minimum iOS**: 17.0
-- **Architecture**: MVVM + Coordinator Pattern
-- **UI Framework**: SwiftUI + UIKit 
+
+* **Language**: Swift 5.9
+* **Minimum iOS**: 17.0
+* **Architecture**: MVVM + Coordinator Pattern
+* **UI Framework**: SwiftUI + UIKit
 
 ### Core Frameworks
+
 ```swift
-- Vision Framework          // 피사체 분리
-- Core Image               // 이미지 합성 및 필터링
+- Vision Framework        // 피사체 분리
+- VisionKit               // Subject Lift (고급 피사체 추출)
+- Core Image / CIFilter   // 마스크 합성 및 커스텀 필터 파이프라인 구성
 - AVFoundation            // 카메라 제어
 - Core Data               // 로컬 데이터 관리
-- VisionKit               // Subject Lift (고급 피사체 추출)
 ```
----
+
+### Firebase & Ads
+
+```swift
+- Firebase Analytics       // 사용자 행동 및 이벤트 분석
+- Google AdMob             // 광고 수익화 (배너 / 전면 / 리워드 광고)
+```
+
 ## 🖥️ Main Flow
 
 
