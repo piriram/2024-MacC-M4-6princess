@@ -19,7 +19,7 @@ struct CameraView: View {
     @StateObject var viewModel = CameraViewModel()
     @StateObject var motionManager = MotionManager()
     //    @StateObject var frameManager = FrameManager()
-    
+
     private var cameraPreview: some View  {
         GeometryReader { geo in
             CameraPreview(viewModel: viewModel)
@@ -42,14 +42,25 @@ struct CameraView: View {
             
         }
     }
-    
+
+    private var resultNavigationBinding: Binding<Bool> {
+        Binding(
+            get: { viewModel.routeToResult },
+            set: { isPresented in
+                if !isPresented {
+                    viewModel.finishResultNavigation()
+                }
+            }
+        )
+    }
+
     var body: some View {
-        
+
         ZStack{
             VStack(spacing: 0) {
                 Color.clear
                     .frame(height: 46) // TopView 높이만큼 여백 확보
-                
+
                 ZStack{
                     if UIScreen.main.bounds.height/UIScreen.main.bounds.width > 2.0 {
                         cameraPreview
@@ -85,10 +96,10 @@ struct CameraView: View {
                                 }
                             }
                     }
-                       
+
                     //                        FilteredImageView()
                 }
-                
+
                 Spacer()
             }
             VStack {
@@ -120,7 +131,7 @@ struct CameraView: View {
         .persistentSystemOverlays(.hidden)
         .statusBar(hidden: true)
         .navigationBarBackButtonHidden()
-        .navigationDestination(isPresented: $viewModel.nextView) {
+        .navigationDestination(isPresented: resultNavigationBinding) {
             if let takenImg = viewModel.takenImg, let frameImg = frameManager.resultImage {
                 IOView(bg: takenImg, idol: frameImg, motionManager: motionManager)
             } else {
@@ -128,11 +139,12 @@ struct CameraView: View {
                     .onAppear {
                         viewModel.errorMessage = "프레임이 없습니다. 다시 촬영해주세요."
                         viewModel.showErrorAlert = true
+                        viewModel.finishResultNavigation()
                     }
             }
-            
-            
-            
+
+
+
         }
         .alert(isPresented: $viewModel.showErrorAlert) {
             Alert(title: Text("오류 발생"), message: Text(viewModel.errorMessage), dismissButton: .default(Text("확인")))
@@ -142,15 +154,17 @@ struct CameraView: View {
             if isActuallyiPad() {
                 viewModel.showOrientationAlert = true
             }
+            viewModel.resetCaptureState()
             viewModel.cameraManager.checkVideoAuthorizaion()
             viewModel.isTakePic = false
             Analytics.logEvent("A1_카메라", parameters: nil)
         }
         .onDisappear {
             motionManager.stopDeviceMotionUpdates()
+            viewModel.cancelCaptureIfNeeded(showCancellationError: false)
             viewModel.cameraManager.stopSession()
         }
-        
+
     }
     // 아이패드로 추정하는 기준
     func isActuallyiPad() -> Bool {
@@ -158,5 +172,5 @@ struct CameraView: View {
         let longerSide = max(size.width, size.height)
         return longerSide > 1000
     }
-    
+
 }

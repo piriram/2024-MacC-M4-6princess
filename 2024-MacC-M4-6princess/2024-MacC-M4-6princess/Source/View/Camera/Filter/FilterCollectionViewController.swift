@@ -319,15 +319,16 @@ class FilterCollectionViewController: UIViewController, UICollectionViewDelegate
             return
         }
 
-        if frameManager.resultImage != nil {
-            viewModel.isTakePic = true
-            DispatchQueue.main.asyncAfter(deadline: DispatchTime.now() + viewModel.delayTime) {
-                self.viewModel.takePic()
-                Analytics.logEvent("A1_셔터버튼눌림", parameters: nil)
-            }
-        } else {
-            viewModel.isTakenPhoto = false
+        guard frameManager.resultImage != nil else {
+            viewModel.resetCaptureState()
             showAlert(message: "프레임이 선택되지 않았습니다. 프레임을 선택해주세요!")
+            return
+        }
+
+        viewModel.isTakePic = true
+        DispatchQueue.main.asyncAfter(deadline: DispatchTime.now() + viewModel.delayTime) {
+            self.viewModel.takePic()
+            Analytics.logEvent("A1_셔터버튼눌림", parameters: nil)
         }
     }
     

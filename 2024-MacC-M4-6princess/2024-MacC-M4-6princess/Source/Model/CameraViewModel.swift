@@ -10,6 +10,36 @@ import AVFoundation
 import Photos
 import Combine
 
+enum CapturePipelineState: Equatable {
+    case idle
+    case scheduled
+    case capturing
+    case processing
+    case readyToNavigate
+    case completed
+    case failed
+}
+
+enum CapturePipelineError: Error, LocalizedError {
+    case invalidPhotoData
+    case invalidImage
+    case cropFailed
+    case viewModelDeallocated
+
+    var errorDescription: String? {
+        switch self {
+        case .invalidPhotoData:
+            return "사진 데이터가 유효하지 않습니다."
+        case .invalidImage:
+            return "이미지 변환에 실패했습니다."
+        case .cropFailed:
+            return "이미지 크롭에 실패했습니다."
+        case .viewModelDeallocated:
+            return "카메라 뷰모델이 해제되었습니다."
+        }
+    }
+}
+
 class CameraViewModel: NSObject, ObservableObject {
 
     @Published var isTakenPhoto = false
@@ -17,13 +47,18 @@ class CameraViewModel: NSObject, ObservableObject {
     @Published var isSavedPhotoData = false
     @Published var picData = Data(count: 0)
     @Published var takenImg: UIImage?
-    @Published var nextView = false
+
+    // 캡처 플로우 상태
+    @Published private(set) var captureState: CapturePipelineState = .idle
+    @Published private(set) var routeToResult: Bool = false
+
+    // 기존 뷰에서 쓰던 하위호환 플래그
     @Published var frameSize = CGRect(origin: .zero, size: .zero)
     @Published var preview: AVCaptureVideoPreviewLayer!
-    
+
     // 프레임 관련 상태
     @Published var frameRatio: CGFloat = 4/3
-    
+
     // 타이머 관련 상태
     @Published var delayTime: TimeInterval = 0.0
     @Published var isTakePic = false
@@ -31,23 +66,23 @@ class CameraViewModel: NSObject, ObservableObject {
     @Published var backgroundOpacity: Double = 0
     @Published var opacity: Double = 1
     @Published var showCountdown: Bool = true
-    
+
     // 타이머 관련 상태 - iPad
     @Published var isPushedTimer: Int = 0
-    
+
     // 프레임 선택 관련 상태
     @Published var isShowAlert = false //프레임 없을 때 alert
     @Published var inputImage: UIImage?
-    
+
     //줌 관련
     @Published var currentZoomFactor: CGFloat = 1.0
     @Published var lastScale: CGFloat = 1.0
-    
+
     //카메라 화면전환 관련
     @Published var cameraPosition: AVCaptureDevice.Position = .back
-    
+
     @Published var showOrientationAlert: Bool = false
-    
+
     //오류 알림
     @Published var showErrorAlert = false
     @Published var errorMessage: String = ""
@@ -58,14 +93,14 @@ class CameraViewModel: NSObject, ObservableObject {
     let cameraManager: CameraManager
     let motionManager = MotionManager()
     private var cancellables: Set<AnyCancellable> = []
-    
+
     init(cameraManager: CameraManager = CameraManager()) {
         self.cameraManager = cameraManager
         self.idolImg = UIImage(named: "Felix") ?? UIImage()
         self.defaultImg = UIImage(named: "whiteBG") ?? UIImage()
         super.init()
         setupPreviewLayer()
-        
+
         if cameraManager.deviceType == .builtInWideAngleCamera {
             self.currentZoomFactor = 2.0
         }
@@ -74,57 +109,79 @@ class CameraViewModel: NSObject, ObservableObject {
         }
         _ = motionManager
     }
-    
+
     private func setupPreviewLayer() {
         preview = AVCaptureVideoPreviewLayer(session: cameraManager.session)
         preview.videoGravity = .resizeAspectFill
     }
-    
+
     func handleCapturedPhoto(_ photo: AVCapturePhoto) {
-        guard !nextView else { return }
+        guard !routeToResult else { return }
+        do {
+            let image = try makeCapturedImage(from: photo)
+            applyCapturedPhoto(image)
+        } catch {
+            handleCaptureError(error)
+        }
+    }
+
+    private func applyCapturedPhoto(_ image: UIImage) {
+        guard captureState != .readyToNavigate else { return }
+
+        self.picData = image.jpegData(compressionQuality: 1.0) ?? Data()
+        self.takenImg = image
+        self.routeToResult = true
+        print("사진이 성공적으로 처리되었습니다")
+
+        self.isTakenPhoto = false
+        self.isTakePic = false
+        self.captureState = .readyToNavigate
+    }
+
+    private func makeCapturedImage(from photo: AVCapturePhoto) throws -> UIImage {
         guard let imageData = photo.fileDataRepresentation() else {
             print("사진 데이터가 유효하지 않음")
-            return
+            throw CapturePipelineError.invalidPhotoData
         }
-        
         guard var image = UIImage(data: imageData) else {
             print("이미지를 생성할 수 없습니다.")
-            return
+            throw CapturePipelineError.invalidImage
         }
-        
+
         // 전면 카메라일 경우 좌우 반전 처리
         if self.cameraManager.videoDeviceInput?.device.position == .front {
             guard let mirroredCGImage = image.cgImage else {
                 print("전면 카메라 이미지 처리 실패: cgImage 없음")
-                return
+                throw CapturePipelineError.invalidImage
             }
             image = UIImage(cgImage: mirroredCGImage, scale: image.scale, orientation: .leftMirrored)
         }
-        
+
         // 이미지의 방향을 .up으로 수정. 이미지 프리뷰를 위함
         image = fixOrientation(image)
-        
+
         let croppedImage = cropToAspectRatio(image: image)
-        
+        guard let croppedCGImage = croppedImage.cgImage else {
+            throw CapturePipelineError.cropFailed
+        }
+
+        return UIImage(cgImage: croppedCGImage, scale: croppedImage.scale, orientation: croppedImage.imageOrientation)
+    }
+
+    private func handleCaptureError(_ error: Error, showAlert: Bool = true) {
         DispatchQueue.main.async {
-            self.picData = croppedImage.jpegData(compressionQuality: 1.0) ?? Data()
-            self.takenImg = croppedImage
-            self.nextView = true
-            //            print("nextView:\(self.nextView)")
-            //            print("이미지 사이즈: \(image.size)")
-            print("사진이 성공적으로 처리되었습니다")
+            if showAlert {
+                self.errorMessage = "촬영 실패: \(error.localizedDescription)"
+                self.showErrorAlert = true
+            }
+
             self.isTakenPhoto = false
+            self.isTakePic = false
+            self.captureState = .failed
+            self.routeToResult = false
         }
     }
-    
-    private func handleCaptureError(_ error: Error) {
-        DispatchQueue.main.async {
-            self.errorMessage = "촬영 실패: \(error.localizedDescription)"
-            self.showErrorAlert = true
-            self.isTakenPhoto = false
-        }
-    }
-    
+
     // 기기 방향에 따라 이미지 회전하는 함수 추가
     func rotateImage(_ image: UIImage, basedOn orientation: UIDeviceOrientation) -> UIImage {
         switch orientation {
@@ -136,7 +193,7 @@ class CameraViewModel: NSObject, ObservableObject {
             return image
         }
     }
-    
+
     //이미지를 비율에 맞게 크롭
     func cropToAspectRatio(image: UIImage) -> UIImage  {
         guard let cgImage = image.cgImage else {
@@ -162,34 +219,47 @@ class CameraViewModel: NSObject, ObservableObject {
         }
         return UIImage(cgImage: croppedImage, scale: image.scale, orientation: image.imageOrientation)
     }
-    
+
     //셔터가 눌리면 실행되는 함수
     func takePic() {
+        if captureState != .scheduled && captureState != .readyToNavigate {
+            guard captureState == .idle || captureState == .completed || captureState == .failed else {
+                return
+            }
+            captureState = .scheduled
+        }
+
         let delay = cameraManager.session.isRunning ? 0.0 : 0.5
+        captureState = .capturing
+        isTakenPhoto = true
 
         Just(())
             .delay(for: .seconds(delay), scheduler: DispatchQueue.main)
             .flatMap { [weak self] _ -> AnyPublisher<AVCapturePhoto, Error> in
                 guard let self else {
-                    return Fail(error: NSError(domain: "CameraViewModel", code: -1, userInfo: [NSLocalizedDescriptionKey: "카메라 뷰모델이 해제되었습니다."]))
+                    return Fail(error: CapturePipelineError.viewModelDeallocated)
                         .eraseToAnyPublisher()
                 }
                 return self.cameraManager.takePicture()
+            }
+            .tryMap { [weak self] photo -> UIImage in
+                guard let self else { throw CapturePipelineError.viewModelDeallocated }
+                self.captureState = .processing
+                return try self.makeCapturedImage(from: photo)
             }
             .receive(on: DispatchQueue.main)
             .sink(
                 receiveCompletion: { [weak self] completion in
                     guard let self else { return }
                     self.isTakenPhoto = false
-                    switch completion {
-                    case .finished:
-                        break
-                    case .failure(let error):
+                    if case .failure(let error) = completion {
                         self.handleCaptureError(error)
+                    } else {
+                        self.isTakePic = false
                     }
                 },
-                receiveValue: { [weak self] photo in
-                    self?.handleCapturedPhoto(photo)
+                receiveValue: { [weak self] image in
+                    self?.applyCapturedPhoto(image)
                 }
             )
             .store(in: &cancellables)
@@ -197,16 +267,64 @@ class CameraViewModel: NSObject, ObservableObject {
 
     @discardableResult
     func beginCapture() -> Bool {
-        guard !isTakenPhoto else { return false }
+        guard captureState == .idle || captureState == .completed || captureState == .failed else {
+            return false
+        }
+
+        captureState = .scheduled
+        routeToResult = false
         isTakenPhoto = true
+        isTakePic = false
+        showErrorAlert = false
+        errorMessage = ""
         return true
     }
-    
+
+    func finishResultNavigation() {
+        routeToResult = false
+        if captureState == .readyToNavigate {
+            captureState = .completed
+        }
+        isTakePic = false
+        isTakenPhoto = false
+    }
+
+    func cancelCaptureIfNeeded(showCancellationError: Bool = false) {
+        guard captureState == .scheduled || captureState == .capturing || captureState == .processing else {
+            return
+        }
+
+        cancellables.removeAll()
+
+        if showCancellationError {
+            handleCaptureError(NSError(domain: "CameraViewModel", code: -1, userInfo: [NSLocalizedDescriptionKey: "촬영이 취소되었습니다."]))
+        } else {
+            captureState = .idle
+            isTakenPhoto = false
+            isTakePic = false
+            routeToResult = false
+            showErrorAlert = false
+            errorMessage = ""
+        }
+    }
+
+    func resetCaptureState() {
+        if captureState == .scheduled || captureState == .capturing || captureState == .processing {
+            cancellables.removeAll()
+        }
+        captureState = .idle
+        isTakenPhoto = false
+        isTakePic = false
+        routeToResult = false
+        showErrorAlert = false
+        errorMessage = ""
+    }
+
     //카메라 전후면 전환(초기 줌 팩터를 다시 맞춰줌)
     func changeCamera() {
         cameraManager.changeCamera()
         cameraPosition = cameraManager.videoDeviceInput?.device.position ?? .back
-        
+
         // 카메라 전환 시 적절한 초기 줌 팩터 설정
         if cameraPosition == .back {
             if cameraManager.deviceType == .builtInUltraWideCamera {
@@ -217,56 +335,56 @@ class CameraViewModel: NSObject, ObservableObject {
         } else {
             currentZoomFactor = 1.0
         }
-        
+
         lastScale = 1.0
     }
-    
+
     //이미지 방향 수정 함수
     func fixOrientation(_ image: UIImage) -> UIImage {
         // 이미지의 방향이 이미 .up이면 그대로 반환
         if image.imageOrientation == .up {
             return image
         }
-        
+
         // 그래픽 컨텍스트 생성
         UIGraphicsBeginImageContextWithOptions(image.size, false, image.scale)
         image.draw(in: CGRect(origin: .zero, size: image.size))
-        
+
         // 새로운 UIImage 생성
         let normalizedImage = UIGraphicsGetImageFromCurrentImageContext() ?? image
         UIGraphicsEndImageContext()
-        
+
         return normalizedImage
     }
-    
+
     //메인 줌 함수
     func zoom(factor: CGFloat) {
         let delta = factor / lastScale
         lastScale = factor
-        
+
         // 현재 줌 상태에서 변화량을 적용
         var newZoomFactor = currentZoomFactor * delta
-        
+
         // 최소/최대 줌 팩터 제한
         if let device = cameraManager.videoDeviceInput?.device {
             let minZoom: CGFloat = 1.0
             let maxZoom: CGFloat = device.deviceType == .builtInUltraWideCamera ? 4.0 : 3.0
             newZoomFactor = min(max(newZoomFactor, minZoom), maxZoom)
-            
+
             // 줌 적용
             cameraManager.zoom(newZoomFactor)
-            
+
             // currentZoomFactor 실시간 업데이트
             withAnimation(.spring(response: 0.3, dampingFraction: 0.6)) {
                 currentZoomFactor = newZoomFactor
             }
         }
     }
-    
+
     //해당 factor로 줌을 해주는 함수
     func setZoom(factor: CGFloat) {
         guard let device = cameraManager.videoDeviceInput?.device else { return }
-        
+
         do {
             try device.lockForConfiguration()
             let actualZoomFactor = if device.position == .back {
@@ -278,7 +396,7 @@ class CameraViewModel: NSObject, ObservableObject {
             } else {
                 factor
             }
-            
+
             device.ramp(toVideoZoomFactor: actualZoomFactor, withRate: 100.0)
             device.videoZoomFactor = actualZoomFactor
             device.unlockForConfiguration()
@@ -287,13 +405,13 @@ class CameraViewModel: NSObject, ObservableObject {
             print("줌 설정 오류: \(error.localizedDescription)")
         }
     }
-    
+
     //줌 스케일 초기화
     func zoomInitialize() {
         lastScale = 1.0  // 제스처를 위한 scale만 초기화
         print("lastScale 초기화됨")
     }
-    
+
     //기기에 따른 줌 범위 설정
     func getZoomRange(for device: AVCaptureDevice) -> ClosedRange<CGFloat> {
         if device.position == .back {
@@ -310,6 +428,6 @@ class CameraViewModel: NSObject, ObservableObject {
             return 1.0...3.0
         }
     }
-    
+
 
 }
