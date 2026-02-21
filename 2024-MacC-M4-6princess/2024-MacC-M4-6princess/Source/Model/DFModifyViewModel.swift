@@ -310,21 +310,30 @@ class DFModifyViewModel: ObservableObject {
     
     func makeImage(view: some View, image: UIImage) -> UIImage? {
         
-        let resultImage: UIImage?
+        if imageList.isEmpty {
+            imageList.append(SubjectImage())
+            indexOfImageList = 0
+        }
+
         let render = ImageRenderer(content: view)
         render.scale = scaleCompute(image)
-        if let rend = render.uiImage {
-            if indexOfImageList < imageList.count - 1 {
-                for _ in indexOfImageList+1..<imageList.count {
-                    imageList.removeLast()
-                }
+        guard let renderedImage = render.uiImage else { return nil }
+
+        if indexOfImageList < imageList.count - 1 {
+            for _ in indexOfImageList+1..<imageList.count {
+                imageList.removeLast()
             }
-            imageList[indexOfImageList].image = rend
-            indexOfImageList += 1
-            
         }
-        resultImage = imageList[indexOfImageList].image
-        return resultImage
+
+        guard imageList.indices.contains(indexOfImageList) else { return nil }
+        imageList[indexOfImageList].image = renderedImage
+        indexOfImageList += 1
+
+        if imageList.count == indexOfImageList {
+            imageList.append(SubjectImage())
+        }
+
+        return renderedImage
     }
     
     

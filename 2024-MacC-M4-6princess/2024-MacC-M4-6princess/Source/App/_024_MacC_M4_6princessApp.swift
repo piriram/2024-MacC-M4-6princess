@@ -16,6 +16,7 @@ struct _024_MacC_M4_6princessApp: App {
     @StateObject private var environmentModel = EnvironmentModel()
     @StateObject private var frameManager = FrameManager()
     @StateObject private var naviManager = NavigationManager()
+    @StateObject private var imageModel = ImageListModel()
     let persistenceController = PersistenceController.shared
     
 
@@ -27,6 +28,7 @@ struct _024_MacC_M4_6princessApp: App {
                 .environmentObject(environmentModel)
                 .environmentObject(naviManager)
                 .environmentObject(frameManager)
+                .environmentObject(imageModel)
         }
     }
 }

@@ -131,10 +131,12 @@ class DFEditViewModel: ObservableObject {
     }
     
     func drawLines(startLocation: CGPoint, location: CGPoint) {
+        guard let mode = Mode(rawValue: selectionModeIndex) else { return }
+
         if lines.isEmpty  {
-            lines = [Line(color: .white, points: [startLocation], mode: Mode(rawValue: selectionModeIndex)!, lineWidth: thickness  / magnifyScale)]
+            lines = [Line(color: .white, points: [startLocation], mode: mode, lineWidth: thickness  / magnifyScale)]
         } else {
-            var newLine = Line(color: .white, points: [], mode:  Mode(rawValue: selectionModeIndex)!, lineWidth: thickness  / magnifyScale)
+            var newLine = Line(color: .white, points: [], mode: mode, lineWidth: thickness  / magnifyScale)
             if startLocation != lines[lines.count - 1].points.first {
                 newLine.points = [startLocation]
                 lines.append(newLine)
@@ -229,26 +231,29 @@ class DFEditViewModel: ObservableObject {
         }
     }
     func createResult(completionHandler: @escaping (Bool) -> Void) {
-           var resultImage: UIImage?
-           
-           guard let inputImage = CIImage(image: inputImage ?? UIImage()) else {
-               print("Failed to create CIImage")
-               completionHandler(false) // 실패
-               return
-           }
-           
-           Task { @MainActor in
-               if let maskImage = maskImage {
-                   let outputImage = apply(mask: CIImage(image: maskImage)!, to: inputImage)
-                   resultImage = convertToUIImage(ciImage: outputImage)
-                   self.resultImage = resultImage
-                   completionHandler(true) // 성공
-               } else {
-                   print("Mask image is nil")
-                   completionHandler(false) // 실패
-               }
-           }
-       }
+        var resultImage: UIImage?
+
+        guard let inputImage = CIImage(image: inputImage ?? UIImage()) else {
+            print("Failed to create CIImage")
+            completionHandler(false)
+            return
+        }
+
+        Task { @MainActor in
+            guard let maskSource = maskImage,
+                  let maskCIImage = CIImage(image: maskSource),
+                  let outputImage = apply(mask: maskCIImage, to: inputImage),
+                  let renderedImage = convertToUIImage(ciImage: outputImage) else {
+                print("Mask image is nil")
+                completionHandler(false)
+                return
+            }
+
+            resultImage = renderedImage
+            self.resultImage = resultImage
+            completionHandler(true)
+        }
+    }
     
     func removeBackground() {
         
@@ -266,11 +271,16 @@ class DFEditViewModel: ObservableObject {
                 return
             }
             
-            let maskImage = apply(mask: fakeMask, to: fakeMask)
-            
-            let outputImage = apply(mask: maskImage, to: inputImage)
-            resultImage = convertToUIImage(ciImage: outputImage)
-            mask = convertToUIImage(ciImage: maskImage)
+            guard let maskImage = apply(mask: fakeMask, to: fakeMask),
+                  let outputImage = apply(mask: maskImage, to: inputImage),
+                  let renderedResult = convertToUIImage(ciImage: outputImage),
+                  let renderedMask = convertToUIImage(ciImage: maskImage) else {
+                print("Failed to create mask")
+                return
+            }
+
+            resultImage = renderedResult
+            mask = renderedMask
             self.maskImage = mask
             self.resultImage = resultImage
         }
@@ -294,19 +304,20 @@ class DFEditViewModel: ObservableObject {
         return nil
     }
     
-    private func apply(mask: CIImage, to image: CIImage) -> CIImage {
+    private func apply(mask: CIImage, to image: CIImage) -> CIImage? {
         
         let filter = CIFilter.blendWithMask()
         filter.inputImage = image
         filter.maskImage = mask
         filter.backgroundImage = CIImage.empty()
-        return filter.outputImage!
+        return filter.outputImage
     }
     
-    private func convertToUIImage(ciImage: CIImage) -> UIImage {
+    private func convertToUIImage(ciImage: CIImage) -> UIImage? {
         
         guard let cgImage = CIContext(options: nil).createCGImage(ciImage, from: ciImage.extent) else {
-            fatalError("Failed to render CGImage")
+            print("Failed to render CGImage")
+            return nil
         }
         return UIImage(cgImage: cgImage)
     }

@@ -118,14 +118,6 @@ struct CameraView: View {
             Text("이 앱은 세로 화면에서 더 좋은 경험을 제공합니다.\n세로 화면 고정을 활성화해주세요.")
         }
         .persistentSystemOverlays(.hidden)
-        .onAppear {
-            motionManager.startDeviceMotionUpdates()
-            if isActuallyiPad() {
-                viewModel.showOrientationAlert = true
-            }
-            
-            //                viewModel.frameImage = frameImage
-        }
         .statusBar(hidden: true)
         .navigationBarBackButtonHidden()
         .navigationDestination(isPresented: $viewModel.nextView) {
@@ -146,12 +138,18 @@ struct CameraView: View {
             Alert(title: Text("오류 발생"), message: Text(viewModel.errorMessage), dismissButton: .default(Text("확인")))
         }
         .onAppear {
-            // 프레임 크기 설정
+            motionManager.startDeviceMotionUpdates()
+            if isActuallyiPad() {
+                viewModel.showOrientationAlert = true
+            }
             viewModel.cameraManager.checkVideoAuthorizaion()
             viewModel.cameraManager.startSession()
             viewModel.isTakePic = false
-//            frameManager.selectedFrame = nil
             Analytics.logEvent("A1_카메라", parameters: nil)
+        }
+        .onDisappear {
+            motionManager.stopDeviceMotionUpdates()
+            viewModel.cameraManager.stopSession()
         }
         
     }

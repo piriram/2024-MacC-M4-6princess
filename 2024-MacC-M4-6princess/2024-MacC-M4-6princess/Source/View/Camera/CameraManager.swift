@@ -232,7 +232,7 @@ class CameraManager: NSObject, AVCapturePhotoCaptureDelegate {
     //카메라 세션 멈춤
     func stopSession() {
         Task {
-            if !self.session.isRunning {
+            if self.session.isRunning {
                 self.session.stopRunning()
             }
         }

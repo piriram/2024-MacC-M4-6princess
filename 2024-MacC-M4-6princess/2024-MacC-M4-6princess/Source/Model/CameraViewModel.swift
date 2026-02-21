@@ -108,7 +108,11 @@ class CameraViewModel: NSObject, ObservableObject, AVCapturePhotoCaptureDelegate
         
         // 전면 카메라일 경우 좌우 반전 처리
         if self.cameraManager.videoDeviceInput?.device.position == .front {
-            image = UIImage(cgImage: image.cgImage!, scale: image.scale, orientation: .leftMirrored)
+            guard let mirroredCGImage = image.cgImage else {
+                print("전면 카메라 이미지 처리 실패: cgImage 없음")
+                return
+            }
+            image = UIImage(cgImage: mirroredCGImage, scale: image.scale, orientation: .leftMirrored)
         }
         
         // 이미지의 방향을 .up으로 수정. 이미지 프리뷰를 위함
@@ -140,19 +144,28 @@ class CameraViewModel: NSObject, ObservableObject, AVCapturePhotoCaptureDelegate
     
     //이미지를 비율에 맞게 크롭
     func cropToAspectRatio(image: UIImage) -> UIImage  {
-        let cgImage = image.cgImage!
-        let width = CGFloat(cgImage.width)
-        let height = CGFloat(cgImage.height)
-        
-        
-        let cropRect: CGRect = CGRect(x: 0, y: (height - (width * 4/3))/2 - 3
-                                      , width: width, height: width * frameRatio)
-        
-        //        print("높이는 \((height - (width * 4/3))/2 - 3)")
-        guard let cgImage = image.cgImage?.cropping(to: cropRect) else {
+        guard let cgImage = image.cgImage else {
             return image
         }
-        return UIImage(cgImage: cgImage, scale: image.scale, orientation: image.imageOrientation)
+        let width = CGFloat(cgImage.width)
+        let height = CGFloat(cgImage.height)
+        guard width > 0 && frameRatio > 0 else { return image }
+
+        let targetHeight = width * frameRatio
+        guard targetHeight > 0 else { return image }
+
+        // 자르기 시작 위치를 안전하게 보정
+        let estimatedY = (height - targetHeight) / 2 - 3
+        let clampedY = max(0, min(estimatedY, max(0, height - targetHeight)))
+        let clampedHeight = min(targetHeight, max(0, height - clampedY))
+        guard clampedHeight > 0 else { return image }
+
+        let cropRect: CGRect = CGRect(x: 0, y: clampedY, width: width, height: clampedHeight)
+
+        guard let croppedImage = image.cgImage?.cropping(to: cropRect) else {
+            return image
+        }
+        return UIImage(cgImage: croppedImage, scale: image.scale, orientation: image.imageOrientation)
     }
     
     //셔터가 눌리면 실행되는 함수

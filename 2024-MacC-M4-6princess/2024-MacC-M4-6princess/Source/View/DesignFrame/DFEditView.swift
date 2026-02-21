@@ -485,8 +485,12 @@ private extension DFEditView {
         
         viewModel.opacity = 1
         viewModel.maskColor = .white
-        let render = ImageRenderer(content: self.canvas.frame(width: viewModel.getWidth() / viewModel.scaleCompute(viewModel.inputImage!), height: viewModel.getHeight() / viewModel.scaleCompute(viewModel.inputImage!)))
-        render.scale = viewModel.scaleCompute(viewModel.inputImage!)
+        guard let inputImage = viewModel.inputImage else {
+            return
+        }
+        let scale = viewModel.scaleCompute(inputImage)
+        let render = ImageRenderer(content: self.canvas.frame(width: viewModel.getWidth() / scale, height: viewModel.getHeight() / scale))
+        render.scale = scale
         
         viewModel.appendMaskImage(render.uiImage)
     }
