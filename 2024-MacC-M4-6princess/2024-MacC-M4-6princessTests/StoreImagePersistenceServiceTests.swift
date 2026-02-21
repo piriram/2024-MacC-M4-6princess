@@ -44,6 +44,23 @@ final class StoreImagePersistenceServiceTests: XCTestCase {
         XCTAssertEqual(records.first?.id, keepId)
     }
 
+    func testDeleteImagesAndReturnCountReturnsDeletedCount() throws {
+        let keepId = UUID()
+        let deleteId1 = UUID()
+        let deleteId2 = UUID()
+
+        insertStoreImage(id: keepId, createdDate: Date())
+        insertStoreImage(id: deleteId1, createdDate: Date().addingTimeInterval(1))
+        insertStoreImage(id: deleteId2, createdDate: Date().addingTimeInterval(2))
+
+        let deletedCount = try sut.deleteImagesAndReturnCount(ids: [deleteId1, deleteId2])
+        let records = try sut.fetchRecords(sort: .createdDateAscending)
+
+        XCTAssertEqual(deletedCount, 2)
+        XCTAssertEqual(records.count, 1)
+        XCTAssertEqual(records.first?.id, keepId)
+    }
+
     private func insertStoreImage(id: UUID, createdDate: Date) {
         let image = StoreImages(context: context)
         image.uuid = id
