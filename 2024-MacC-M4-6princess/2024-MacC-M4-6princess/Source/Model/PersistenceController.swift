@@ -8,12 +8,14 @@ class PersistenceController {
         container = NSPersistentContainer(name: "ImageModel") // .xcdatamodeld 파일명
         
         if inMemory {
-            container.persistentStoreDescriptions.first?.url = URL(fileURLWithPath: "file:///var/mobile/Containers/Data/Application/D1E76FBE-FB26-45FF-A12E-46214A60835E/Library/Application%20Support/ImageModel.sqlite")
+            container.persistentStoreDescriptions.first?.url = URL(fileURLWithPath: "/dev/null")
         }
         
         container.loadPersistentStores { description, error in
             if let error = error {
-                fatalError("Core Data store failed to load: \(error.localizedDescription)")
+                assertionFailure("Core Data store failed to load: \(error.localizedDescription)")
+                print("Core Data store failed to load: \(error.localizedDescription)")
+                return
             }
             
             #if DEBUG
