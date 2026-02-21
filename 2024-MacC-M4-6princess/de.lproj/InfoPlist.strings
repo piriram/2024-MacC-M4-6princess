@@ -1,0 +1,9 @@
+/*
+  Localizable_.strings
+  2024-MacC-M4-6princess
+  
+  Auto-generated for permission strings
+*/
+"NSPhotoLibraryUsageDescription" = "Um die App zu verwenden, ist der Zugriff auf die Fotobibliothek erforderlich.";
+"NSCameraUsageDescription" = "Um die App zu verwenden, ist der Zugriff auf die Kamera erforderlich.";
+"NSPhotoLibraryAddUsageDescription" = "Diese App benötigt Zugriff auf die Fotobibliothek, um das bearbeitete Bild zu speichern.";
