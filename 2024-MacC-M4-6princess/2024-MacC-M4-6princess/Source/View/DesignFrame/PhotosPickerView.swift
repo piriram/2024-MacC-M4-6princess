@@ -9,45 +9,45 @@ struct PhotosPickerView: View {
     @State private var isPresented: Bool = false
     @EnvironmentObject var naviManager: NavigationManager
     @EnvironmentObject var frameManager: FrameManager
-    
+
     var body: some View {
         ZStack {
             VStack {
                 toolbarButton
-                ImageScrollViewRepresentable(images: vm.models) {
-                    if vm.album.count - vm.currentIndex >= 60 {
-                        vm.currentIndex += 60
-                    } else {
-                        vm.currentIndex = vm.album.count
-                    }
+                ImageScrollViewRepresentable(
+                    images: vm.models,
+                    onScrollToBottom: {
+                        if vm.canLoadMorePages {
+                            let addedRange = vm.fetchNextPage()
+                            if addedRange.isEmpty {
+                                return
+                            }
 
-                    vm.fetchAlbum()
-                    guard vm.currentIndex < vm.album.count else { return }
+                            for i in addedRange {
+                                vm.loadImage(for: vm.album[i], index: i)
+                            }
+                        }
+                    },
+                    onVisibleIndexChange: { index in
+                        vm.prefetchAround(index: index)
+                    },
+                    onImageTap: { index in
+                        guard index < vm.models.count, index < vm.album.count else { return }
 
-                    for i in vm.currentIndex..<vm.album.count {
-                        vm.loadImage(
-                            for: vm.album[i],
-                            size: CGSize(width: UIScreen.main.bounds.width * 0.3, height: UIScreen.main.bounds.width * 0.3),
-                            index: i
-                        )
-                    }
-                    
-                } onImageTap: { index in
-                    guard index < vm.models.count, index < vm.album.count else { return }
+                        if vm.selectedIndex >= 0 {
+                            vm.models[vm.selectedIndex].isSelected = false
+                        }
+                        vm.selectedIndex = index
+                        vm.models[index].isSelected = true
 
-                    if vm.selectedIndex >= 0 {
-                        vm.models[vm.selectedIndex].isSelected = false
+                        let tappedModel = vm.models[index]
+                        vm.getImage(image: tappedModel, for: vm.album[index]) { image in
+                            guard let image, vm.selectedIndex == index else { return }
+                            frameManager.pickedImage = image
+                            naviManager.push(screen: Screen.frameEdit)
+                        }
                     }
-                    vm.selectedIndex = index
-                    vm.models[index].isSelected = true
-
-                    let tappedModel = vm.models[index]
-                    vm.getImage(image: tappedModel, for: vm.album[index]) { image in
-                        guard let image, vm.selectedIndex == index else { return }
-                        frameManager.pickedImage = image
-                        naviManager.push(screen: Screen.frameEdit)
-                    }
-                }
+                )
                 .padding(.top, 10)
             }
             VStack {
@@ -62,17 +62,15 @@ struct PhotosPickerView: View {
                 vm.selectedIndex = -1
                 frameManager.pickedImage = nil
             }
-            
+
             PHPhotoLibrary.requestAuthorization(for: .readWrite) { status in
                 if status == .authorized {
                     if vm.firstAppear {
-                        vm.fetchAlbum()
-                        for i in 0..<vm.album.count {
-                            vm.loadImage(
-                                for: vm.album[i],
-                                size: CGSize(width: UIScreen.main.bounds.width * 0.3, height: UIScreen.main.bounds.width * 0.3),
-                                index: i
-                            )
+                        let initialRange = vm.fetchInitialAlbum()
+                        if !initialRange.isEmpty {
+                            for i in initialRange {
+                                vm.loadImage(for: vm.album[i], index: i)
+                            }
                         }
                         vm.firstAppear = false
                     }
