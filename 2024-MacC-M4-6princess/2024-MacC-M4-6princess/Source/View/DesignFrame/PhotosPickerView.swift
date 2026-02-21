@@ -14,44 +14,38 @@ struct PhotosPickerView: View {
         ZStack {
             VStack {
                 toolbarButton
-//                ScrollViewWithOffset
-//                    .padding(.top, 10)
                 ImageScrollViewRepresentable(images: vm.models) {
-                    print("끝까지 스크롤")
                     if vm.album.count - vm.currentIndex >= 60 {
                         vm.currentIndex += 60
-                        vm.fetchedAlbum += 60
-                        print("모델삽입")
-                        
                     } else {
                         vm.currentIndex = vm.album.count
                     }
+
                     vm.fetchAlbum()
+                    guard vm.currentIndex < vm.album.count else { return }
+
                     for i in vm.currentIndex..<vm.album.count {
-                        vm.loadImage(for: vm.album[i], size: CGSize(width: UIScreen.main.bounds.width*0.3, height: UIScreen.main.bounds.width*0.3), index: i)
+                        vm.loadImage(
+                            for: vm.album[i],
+                            size: CGSize(width: UIScreen.main.bounds.width * 0.3, height: UIScreen.main.bounds.width * 0.3),
+                            index: i
+                        )
                     }
                     
-                }onImageTap: { index in
-                    print("사진클릭!")
-                    if vm.selectedIndex < 0 {
-                        vm.selectedIndex = index
-                        vm.models[index].isSelected = true
-                        
-                    }
-                    
+                } onImageTap: { index in
+                    guard index < vm.models.count, index < vm.album.count else { return }
+
                     if vm.selectedIndex >= 0 {
-                        vm.getImage(image: vm.models[vm.selectedIndex], for: vm.album[vm.selectedIndex]) {
-                            
-                            if let image = vm.outputImage {
-                                frameManager.pickedImage = image
-                            }
-                            
-                            DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
-                                if frameManager.pickedImage != nil  && vm.models[index].isSelected {
-                                    naviManager.push(screen: Screen.frameEdit)
-                                }
-                            }
-                        }
+                        vm.models[vm.selectedIndex].isSelected = false
+                    }
+                    vm.selectedIndex = index
+                    vm.models[index].isSelected = true
+
+                    let tappedModel = vm.models[index]
+                    vm.getImage(image: tappedModel, for: vm.album[index]) { image in
+                        guard let image, vm.selectedIndex == index else { return }
+                        frameManager.pickedImage = image
+                        naviManager.push(screen: Screen.frameEdit)
                     }
                 }
                 .padding(.top, 10)
@@ -63,7 +57,6 @@ struct PhotosPickerView: View {
             }
         }
         .onAppear {
-            
             if vm.selectedIndex >= 0 {
                 vm.models[vm.selectedIndex].isSelected = false
                 vm.selectedIndex = -1
@@ -72,17 +65,17 @@ struct PhotosPickerView: View {
             
             PHPhotoLibrary.requestAuthorization(for: .readWrite) { status in
                 if status == .authorized {
-                    //                    DispatchQueue.main.async {
                     if vm.firstAppear {
                         vm.fetchAlbum()
-                        print(vm.album.count)
                         for i in 0..<vm.album.count {
-                            print("모델 삽입 실행됨")
-                            vm.loadImage(for: vm.album[i], size: CGSize(width: UIScreen.main.bounds.width*0.3, height: UIScreen.main.bounds.width*0.3), index: i)
+                            vm.loadImage(
+                                for: vm.album[i],
+                                size: CGSize(width: UIScreen.main.bounds.width * 0.3, height: UIScreen.main.bounds.width * 0.3),
+                                index: i
+                            )
                         }
                         vm.firstAppear = false
                     }
-                    //                    }
                 }
             }
             vm.changeOpacity()
