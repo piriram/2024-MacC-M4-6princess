@@ -1,7 +1,7 @@
 import Foundation
 import AVFoundation
 
-enum CameraAuthorizationState {
+enum CameraAuthorizationState: Equatable {
     case authorized
     case notDetermined
     case denied
@@ -26,20 +26,30 @@ protocol CameraSessionServicing {
 
 final class CameraSessionService: CameraSessionServicing {
     private let logger: (String) -> Void
+    private let authorizationStatusProvider: () -> AVAuthorizationStatus
+    private let requestAccessProvider: (@escaping (Bool) -> Void) -> Void
 
-    init(logger: @escaping (String) -> Void = { print($0) }) {
+    init(
+        logger: @escaping (String) -> Void = { print($0) },
+        authorizationStatusProvider: @escaping () -> AVAuthorizationStatus = { AVCaptureDevice.authorizationStatus(for: .video) },
+        requestAccessProvider: @escaping (@escaping (Bool) -> Void) -> Void = { completion in
+            AVCaptureDevice.requestAccess(for: .video, completionHandler: completion)
+        }
+    ) {
         self.logger = logger
+        self.authorizationStatusProvider = authorizationStatusProvider
+        self.requestAccessProvider = requestAccessProvider
     }
 
     func requestVideoAuthorization(completion: @escaping (CameraAuthorizationState) -> Void) {
-        let currentState = CameraAuthorizationState.from(AVCaptureDevice.authorizationStatus(for: .video))
+        let currentState = CameraAuthorizationState.from(authorizationStatusProvider())
 
         switch currentState {
         case .authorized, .denied, .restricted:
             logger("[CameraSession] authorization=\(currentState)")
             completion(currentState)
         case .notDetermined:
-            AVCaptureDevice.requestAccess(for: .video) { granted in
+            requestAccessProvider { granted in
                 let result: CameraAuthorizationState = granted ? .authorized : .denied
                 self.logger("[CameraSession] authorizationRequested result=\(result)")
                 completion(result)
