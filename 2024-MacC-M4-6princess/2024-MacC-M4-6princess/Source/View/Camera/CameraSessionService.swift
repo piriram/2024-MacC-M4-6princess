@@ -53,6 +53,8 @@ final class CameraSessionService: CameraSessionServicing {
     private let logger: (String) -> Void
     private let authorizationStatusProvider: () -> AVAuthorizationStatus
     private let requestAccessProvider: (@escaping (Bool) -> Void) -> Void
+    private var sessionReferenceCounts: [ObjectIdentifier: Int] = [:]
+    private let stateQueue = DispatchQueue(label: "com.024-MacC-M4-6princess.CameraSessionService.state")
 
     init(
         logger: @escaping (String) -> Void = { print($0) },
@@ -83,6 +85,10 @@ final class CameraSessionService: CameraSessionServicing {
     }
 
     func startSession(_ session: AVCaptureSession) {
+        let shouldStart = self.updateReferenceCount(for: session, delta: 1)
+
+        guard shouldStart else { return }
+
         Task {
             if !session.isRunning {
                 session.startRunning()
@@ -92,11 +98,44 @@ final class CameraSessionService: CameraSessionServicing {
     }
 
     func stopSession(_ session: AVCaptureSession) {
+        let shouldStop = self.updateReferenceCount(for: session, delta: -1)
+
+        guard shouldStop else { return }
+
         Task {
             if session.isRunning {
                 session.stopRunning()
                 logger("[CameraSession] stopped")
             }
+        }
+    }
+
+    func debugReferenceCount(for session: AVCaptureSession) -> Int {
+        let key = ObjectIdentifier(session)
+        return stateQueue.sync {
+            sessionReferenceCounts[key] ?? 0
+        }
+    }
+
+    private func updateReferenceCount(for session: AVCaptureSession, delta: Int) -> Bool {
+        let key = ObjectIdentifier(session)
+        return stateQueue.sync {
+            let current = self.sessionReferenceCounts[key] ?? 0
+            let next = max(0, current + delta)
+
+            if next == 0 {
+                self.sessionReferenceCounts.removeValue(forKey: key)
+            } else {
+                self.sessionReferenceCounts[key] = next
+            }
+
+            if delta > 0 {
+                return current == 0
+            } else if delta < 0 {
+                return current == 1
+            }
+
+            return false
         }
     }
 }

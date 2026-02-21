@@ -319,7 +319,6 @@ class FilterCollectionViewController: UIViewController, UICollectionViewDelegate
             viewModel.isTakePic = true
             DispatchQueue.main.asyncAfter(deadline: DispatchTime.now() + viewModel.delayTime) {
                 self.viewModel.takePic()
-                self.viewModel.cameraManager.stopSession()
                 Analytics.logEvent("A1_셔터버튼눌림", parameters: nil)
             }
         } else {

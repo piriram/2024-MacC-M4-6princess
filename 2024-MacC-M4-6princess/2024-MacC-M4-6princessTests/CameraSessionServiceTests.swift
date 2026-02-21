@@ -36,6 +36,38 @@ final class CameraSessionServiceTests: XCTestCase {
         wait(for: [exp], timeout: 1)
     }
 
+    func testRequestAuthorizationReturnsDeniedWhenPermissionDenied() {
+        let sut = CameraSessionService(
+            logger: { _ in },
+            authorizationStatusProvider: { .denied },
+            requestAccessProvider: { _ in XCTFail("requestAccess should not be called") }
+        )
+
+        let exp = expectation(description: "authorization callback denied")
+        sut.requestVideoAuthorization { state in
+            XCTAssertEqual(state, .denied)
+            exp.fulfill()
+        }
+
+        wait(for: [exp], timeout: 1)
+    }
+
+    func testRequestAuthorizationReturnsRestrictedWhenPermissionRestricted() {
+        let sut = CameraSessionService(
+            logger: { _ in },
+            authorizationStatusProvider: { .restricted },
+            requestAccessProvider: { _ in XCTFail("requestAccess should not be called") }
+        )
+
+        let exp = expectation(description: "authorization callback restricted")
+        sut.requestVideoAuthorization { state in
+            XCTAssertEqual(state, .restricted)
+            exp.fulfill()
+        }
+
+        wait(for: [exp], timeout: 1)
+    }
+
     func testRequestAuthorizationPublisherReturnsAuthorized() {
         let sut = CameraSessionService(
             logger: { _ in },
@@ -97,6 +129,38 @@ final class CameraSessionServiceTests: XCTestCase {
             XCTAssertTrue(logs.contains("[CameraSession] started"))
             exp.fulfill()
         }
+        wait(for: [exp], timeout: 1)
+    }
+
+    func testStartSessionIsReferenceCounted() {
+        let sut = CameraSessionService(logger: { _ in })
+        let session = AVCaptureSession()
+
+        sut.startSession(session)
+        XCTAssertEqual(sut.debugReferenceCount(for: session), 1)
+
+        sut.startSession(session)
+        XCTAssertEqual(sut.debugReferenceCount(for: session), 2)
+
+        sut.stopSession(session)
+        XCTAssertEqual(sut.debugReferenceCount(for: session), 1)
+
+        sut.stopSession(session)
+        XCTAssertEqual(sut.debugReferenceCount(for: session), 0)
+    }
+
+    func testStopSessionWithoutActiveStartDoesNothing() {
+        let sut = CameraSessionService(logger: { _ in })
+        let session = AVCaptureSession()
+
+        let exp = expectation(description: "stop without start")
+        sut.stopSession(session)
+
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) {
+            XCTAssertFalse(session.isRunning)
+            exp.fulfill()
+        }
+
         wait(for: [exp], timeout: 1)
     }
 }

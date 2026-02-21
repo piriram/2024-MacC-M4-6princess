@@ -161,3 +161,27 @@
 - [x] `CameraSessionService` 신규 Combine publisher API 테스트 4건 추가 (`CameraSessionServiceTests`)
 - [x] `session.startRunning()` 직접 호출 제거 (`FilteredImageView`, `Camera+iPad`)
 - [x] 커밋: `42f7ce9` (`Refactor: CameraSessionService Combine 스트림 통합`)
+
+
+## 2-6. 3차 진행: 촬영 타이밍에서 세션 중단으로 인한 capture 실패 수정
+
+### 적용 범위
+- `FilterCollectionViewController.swift`
+- `CameraSessionService.swift`
+- `CameraSessionServiceTests.swift`
+
+### 오류 분석
+- `FilterCollectionViewController`의 셔터 동작에서 `takePic()` 직후 `cameraManager.stopSession()`을 즉시 호출
+- 결합된 `takePicture()`는 내부에서 `session.isRunning`을 최초 체크
+- 호출 타이밍이 맞물리면서 세션이 멈춘 직후에 캡처 요청이 실패 (`세션이 실행중이지 않습니다`)
+
+### 수정
+- 촬영 직후 즉시 세션 종료 호출 제거
+- `CameraSessionService`를 세션 재시작 카운팅 기반으로 정밀화
+- 테스트 보강: Reference count 경계(중복 start/stop) 및 로그 기반 검증 강화
+
+### 실행 결과 (2026-02-21)
+- [x] `xcodebuild test` 통과
+- [x] `xcodebuild build` 통과
+- [x] 런타임 오류 패턴 `세션이 실행중이지 않습니다` 대응(샷 직전 강제 stop 제거)
+- [ ] 실제 시뮬레이터/디바이스 런 검증은 다음 사용자 테스트에서 확인 예정
