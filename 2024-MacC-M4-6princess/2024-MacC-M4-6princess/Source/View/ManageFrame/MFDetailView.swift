@@ -177,6 +177,17 @@ struct MFDetailView: View {
         } message: {
             Text("프레임을 삭제하면 다시 되돌릴 수 없습니다.")
         }
+        .alert(
+            "오류",
+            isPresented: Binding(
+                get: { viewModel.appError != nil },
+                set: { if !$0 { viewModel.appError = nil } }
+            )
+        ) {
+            Button("확인", role: .cancel) { }
+        } message: {
+            Text(viewModel.appError?.userMessage ?? "알 수 없는 오류가 발생했습니다.")
+        }
         .onAppear {
             viewModel.configure(context: viewContext, selectedId: frameManager.selectedFrameIdForDetail)
         }

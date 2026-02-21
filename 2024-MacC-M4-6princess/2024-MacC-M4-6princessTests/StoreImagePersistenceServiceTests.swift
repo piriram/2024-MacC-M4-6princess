@@ -61,7 +61,38 @@ final class StoreImagePersistenceServiceTests: XCTestCase {
         XCTAssertEqual(records.first?.id, keepId)
     }
 
-    private func insertStoreImage(id: UUID, createdDate: Date) {
+    func testFetchSubjectRecordsMapsSavedSubjectData() throws {
+        let frameId = UUID()
+        let storeImage = insertStoreImage(id: frameId, createdDate: Date())
+
+        let subject = Subject(context: context)
+        subject.subImage = Data([0xAA])
+        subject.originalImage = Data([0xBB])
+        subject.maskImage = Data([0xCC])
+        subject.text = Data([0xDD])
+        subject.originalText = "sample"
+        subject.sticker = Data([0xEE])
+        subject.scale = 1.5
+        subject.angle = 15
+        subject.x = 3
+        subject.y = 7
+
+        storeImage.addToSubjects(subject)
+        try context.save()
+
+        let records = try sut.fetchSubjectRecords(for: frameId)
+
+        XCTAssertEqual(records.count, 1)
+        XCTAssertEqual(records.first?.originalText, "sample")
+        XCTAssertEqual(records.first?.scale, 1.5)
+        XCTAssertEqual(records.first?.angle, 15)
+        XCTAssertEqual(records.first?.x, 3)
+        XCTAssertEqual(records.first?.y, 7)
+        XCTAssertEqual(records.first?.subImage, Data([0xAA]))
+    }
+
+    @discardableResult
+    private func insertStoreImage(id: UUID, createdDate: Date) -> StoreImages {
         let image = StoreImages(context: context)
         image.uuid = id
         image.createdDate = createdDate
@@ -72,5 +103,7 @@ final class StoreImagePersistenceServiceTests: XCTestCase {
         } catch {
             XCTFail("failed to save test data: \(error)")
         }
+
+        return image
     }
 }
