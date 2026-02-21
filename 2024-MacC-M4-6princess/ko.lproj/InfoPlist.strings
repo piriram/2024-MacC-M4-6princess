@@ -7,3 +7,4 @@
 */
 "NSPhotoLibraryUsageDescription" = "앱을 사용하려면 앨범 접근 권한이 필요합니다.";
 "NSCameraUsageDescription" = "앱을 사용하려면 카메라 권한이 필요합니다.";
+"NSPhotoLibraryAddUsageDescription" = "편집한 이미지를 사진 라이브러리에 저장하기 위해 사용합니다.";

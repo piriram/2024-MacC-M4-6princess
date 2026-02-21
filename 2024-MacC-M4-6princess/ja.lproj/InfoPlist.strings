@@ -7,3 +7,4 @@
 */
 "NSPhotoLibraryUsageDescription" = "このアプリを使用するには写真ライブラリへのアクセスが必要です。";
 "NSCameraUsageDescription" = "このアプリを使用するにはカメラへのアクセスが必要です。";
+"NSPhotoLibraryAddUsageDescription" = "このアプリでは編集した画像を保存するために写真ライブラリへのアクセスが必要です。";

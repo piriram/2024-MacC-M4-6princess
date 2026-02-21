@@ -458,9 +458,6 @@
 				INFOPLIST_FILE = "-024-MacC-M4-6princess-Info.plist";
 				INFOPLIST_KEY_CFBundleDisplayName = Frameet;
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.photography";
-				INFOPLIST_KEY_NSCameraUsageDescription = "카메라로 사진을 촬영해 프레임 편집 기능을 사용하기 위해 사용합니다.";
-				INFOPLIST_KEY_NSPhotoLibraryUsageDescription = "포토 라이브러리에 접근해 이미지를 선택하고 저장하기 위해 사용합니다.";
-				INFOPLIST_KEY_NSPhotoLibraryAddUsageDescription = "편집한 이미지를 사진 라이브러리에 저장하기 위해 사용합니다.";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
@@ -500,9 +497,6 @@
 				INFOPLIST_FILE = "-024-MacC-M4-6princess-Info.plist";
 				INFOPLIST_KEY_CFBundleDisplayName = Frameet;
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.photography";
-				INFOPLIST_KEY_NSCameraUsageDescription = "카메라로 사진을 촬영해 프레임 편집 기능을 사용하기 위해 사용합니다.";
-				INFOPLIST_KEY_NSPhotoLibraryUsageDescription = "포토 라이브러리에 접근해 이미지를 선택하고 저장하기 위해 사용합니다.";
-				INFOPLIST_KEY_NSPhotoLibraryAddUsageDescription = "편집한 이미지를 사진 라이브러리에 저장하기 위해 사용합니다.";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
