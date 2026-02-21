@@ -134,3 +134,30 @@
 - [x] `xcodebuild build` 통과
 - [x] 코드 변경: `CameraManager`/`CameraViewModel`/`CameraTimerSecondsView`
 - [x] 커밋: `c806e78` (`Refactor: Combine 기반 Camera 촬영 파이프라인 정리`)
+
+## 2-5. 2차 진행: CameraSessionService를 Combine 스트림으로 노출
+
+### 적용 범위
+- `CameraSessionService.swift`
+- `CameraManager.swift`
+- `CameraView.swift`
+- `Camera+iPad.swift`, `FilterImageView.swift`
+
+### 변경 내용
+- `CameraSessionService`에 `requestVideoAuthorizationPublisher / startSessionPublisher / stopSessionPublisher` 추가
+  - 기존 callback API는 유지하고, Combine API는 프로토콜 기본 구현(`protocol extension`)으로 제공
+- `CameraManager.checkVideoAuthorizaion()`가 Combine publisher를 구독해 권한 상태별 처리
+  - `.authorized`일 때 `setUp()` 수행(내부적으로 session start)
+- 화면 뷰에서 `session.startRunning()` 직접 호출을 제거하고 `cameraManager.startSession()`로 경계 일치
+
+### 다음 검증
+- [ ] `xcodebuild test` 통과(기존 테스트 + publisher 경로 단위 테스트 추가 예정)
+- [ ] 권한 미확정/거절 흐름에서 로그/오류 메시지 경로 점검
+- [ ] `FilteredImageView`/iPad 필터 뷰에서 간접 session 시작/중단 경로 동작 확인
+
+### 2-5 실행 결과 (2026-02-21)
+- [x] `xcodebuild test` 통과 (전체 테스트 스위트, `2024-MacC-M4-6princessTests`)
+- [x] `xcodebuild build` 통과
+- [x] `CameraSessionService` 신규 Combine publisher API 테스트 4건 추가 (`CameraSessionServiceTests`)
+- [x] `session.startRunning()` 직접 호출 제거 (`FilteredImageView`, `Camera+iPad`)
+- [x] 커밋: `42f7ce9` (`Refactor: CameraSessionService Combine 스트림 통합`)

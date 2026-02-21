@@ -1,5 +1,6 @@
 import XCTest
 import AVFoundation
+import Combine
 @testable import _024_MacC_M4_6princess
 
 final class CameraSessionServiceTests: XCTestCase {
@@ -31,6 +32,51 @@ final class CameraSessionServiceTests: XCTestCase {
             XCTAssertEqual(state, .authorized)
             exp.fulfill()
         }
+
+        wait(for: [exp], timeout: 1)
+    }
+
+    func testRequestAuthorizationPublisherReturnsAuthorized() {
+        let sut = CameraSessionService(
+            logger: { _ in },
+            authorizationStatusProvider: { .authorized },
+            requestAccessProvider: { _ in }
+        )
+
+        let exp = expectation(description: "authorization publisher")
+        _ = sut.requestVideoAuthorizationPublisher()
+            .sink { state in
+                XCTAssertEqual(state, .authorized)
+                exp.fulfill()
+            }
+
+        wait(for: [exp], timeout: 1)
+    }
+
+    func testStartSessionPublisherPublishesSuccess() {
+        let sut = CameraSessionService(logger: { _ in })
+        let session = AVCaptureSession()
+
+        let exp = expectation(description: "start publisher")
+        _ = sut.startSessionPublisher(session)
+            .sink { value in
+                XCTAssertTrue(value)
+                exp.fulfill()
+            }
+
+        wait(for: [exp], timeout: 1)
+    }
+
+    func testStopSessionPublisherPublishesSuccess() {
+        let sut = CameraSessionService(logger: { _ in })
+        let session = AVCaptureSession()
+
+        let exp = expectation(description: "stop publisher")
+        _ = sut.stopSessionPublisher(session)
+            .sink { value in
+                XCTAssertTrue(value)
+                exp.fulfill()
+            }
 
         wait(for: [exp], timeout: 1)
     }

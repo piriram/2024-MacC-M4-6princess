@@ -1,5 +1,6 @@
 import Foundation
 import AVFoundation
+import Combine
 
 enum CameraAuthorizationState: Equatable {
     case authorized
@@ -20,8 +21,32 @@ enum CameraAuthorizationState: Equatable {
 
 protocol CameraSessionServicing {
     func requestVideoAuthorization(completion: @escaping (CameraAuthorizationState) -> Void)
+    func requestVideoAuthorizationPublisher() -> AnyPublisher<CameraAuthorizationState, Never>
     func startSession(_ session: AVCaptureSession)
+    func startSessionPublisher(_ session: AVCaptureSession) -> AnyPublisher<Bool, Never>
     func stopSession(_ session: AVCaptureSession)
+    func stopSessionPublisher(_ session: AVCaptureSession) -> AnyPublisher<Bool, Never>
+}
+
+extension CameraSessionServicing {
+    func requestVideoAuthorizationPublisher() -> AnyPublisher<CameraAuthorizationState, Never> {
+        Future { promise in
+            requestVideoAuthorization { state in
+                promise(.success(state))
+            }
+        }
+        .eraseToAnyPublisher()
+    }
+
+    func startSessionPublisher(_ session: AVCaptureSession) -> AnyPublisher<Bool, Never> {
+        startSession(session)
+        return Just(true).eraseToAnyPublisher()
+    }
+
+    func stopSessionPublisher(_ session: AVCaptureSession) -> AnyPublisher<Bool, Never> {
+        stopSession(session)
+        return Just(true).eraseToAnyPublisher()
+    }
 }
 
 final class CameraSessionService: CameraSessionServicing {

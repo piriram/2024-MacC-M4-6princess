@@ -17,6 +17,7 @@ protocol CameraManagerDelegate: AnyObject {
 }
 
 class CameraManager: NSObject, AVCapturePhotoCaptureDelegate {
+    private(set) var sessionSetupCancellable: AnyCancellable?
     weak var delegate: CameraManagerDelegate?
     @Published var session: AVCaptureSession
     @Published var preset: AVCaptureSession.Preset
@@ -79,21 +80,21 @@ class CameraManager: NSObject, AVCapturePhotoCaptureDelegate {
 
     //카메라 접근권한 체크 함수
     func checkVideoAuthorizaion() {
-        sessionService.requestVideoAuthorization { [weak self] state in
-            guard let self else { return }
-            switch state {
-            case .authorized:
-                DispatchQueue.main.async {
+        sessionSetupCancellable = sessionService.requestVideoAuthorizationPublisher()
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] state in
+                guard let self else { return }
+                switch state {
+                case .authorized:
                     self.setUp()
+                case .notDetermined:
+                    break
+                case .denied:
+                    print("카메라 접근권한 denied")
+                case .restricted:
+                    print("카메라 접근권한 restricted")
                 }
-            case .notDetermined:
-                break
-            case .denied:
-                print("카메라 접근권한 denied")
-            case .restricted:
-                print("카메라 접근권한 restricted")
             }
-        }
     }
 
     //카메라를 처음에 세팅하는 함수
