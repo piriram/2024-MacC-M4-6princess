@@ -22,15 +22,18 @@ class CameraManager: NSObject, AVCapturePhotoCaptureDelegate {
     @Published var output: AVCapturePhotoOutput
     @Published var startFactor: CGFloat = 2.0
     @Published var deviceType: AVCaptureDevice.DeviceType
+    private let sessionService: CameraSessionServicing
     
     init(session: AVCaptureSession = AVCaptureSession(),
          videoDeviceInput: AVCaptureDeviceInput? = nil,
-         output: AVCapturePhotoOutput = AVCapturePhotoOutput()) {
+         output: AVCapturePhotoOutput = AVCapturePhotoOutput(),
+         sessionService: CameraSessionServicing = CameraSessionService()) {
         self.session = session
         self.preset = .photo
         self.videoDeviceInput = videoDeviceInput
         self.output = output
         self.deviceType = .builtInWideAngleCamera
+        self.sessionService = sessionService
         super.init()
     }
     
@@ -59,25 +62,20 @@ class CameraManager: NSObject, AVCapturePhotoCaptureDelegate {
     
     //카메라 접근권한 체크 함수
     func checkVideoAuthorizaion() {
-        switch AVCaptureDevice.authorizationStatus(for: .video) {
-        case .authorized:
-            DispatchQueue.main.async {
-                self.setUp()
-            }
-        case .notDetermined:
-            AVCaptureDevice.requestAccess(for: .video) { [weak self] granted in
-                if granted {
-                    DispatchQueue.main.async {
-                        self?.setUp()
-                    }
+        sessionService.requestVideoAuthorization { [weak self] state in
+            guard let self else { return }
+            switch state {
+            case .authorized:
+                DispatchQueue.main.async {
+                    self.setUp()
                 }
+            case .notDetermined:
+                break
+            case .denied:
+                print("카메라 접근권한 denied")
+            case .restricted:
+                print("카메라 접근권한 restricted")
             }
-        case .denied:
-            print("카메라 접근권한 denied")
-        case .restricted:
-            print("카메라 접근권한 restricted")
-        @unknown default:
-            print("카메라 접근권한 알 수 없는 상태")
         }
     }
     
@@ -222,20 +220,12 @@ class CameraManager: NSObject, AVCapturePhotoCaptureDelegate {
     
     //카메라 세션 시작
     func startSession() {
-        Task {
-            if !self.session.isRunning {
-                self.session.startRunning()
-            }
-        }
+        sessionService.startSession(session)
     }
     
     //카메라 세션 멈춤
     func stopSession() {
-        Task {
-            if self.session.isRunning {
-                self.session.stopRunning()
-            }
-        }
+        sessionService.stopSession(session)
     }
     
     //사진 처리를 시작하는 함수
