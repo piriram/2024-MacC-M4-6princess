@@ -252,12 +252,26 @@ class CameraManager: NSObject, AVCapturePhotoCaptureDelegate {
         settings.isHighResolutionPhotoEnabled = output.isHighResolutionCaptureEnabled
 
         if #available(iOS 15.0, *) {
-            settings.photoQualityPrioritization = .quality
+            settings.photoQualityPrioritization = effectivePhotoQualityPrioritization()
         }
 
         // 메인 스레드에서 실행
         DispatchQueue.main.async {
             self.output.capturePhoto(with: settings, delegate: delegate)
+        }
+    }
+
+    private func effectivePhotoQualityPrioritization() -> AVCapturePhotoOutput.QualityPrioritization {
+        guard #available(iOS 15.0, *) else { return .speed }
+        switch output.maxPhotoQualityPrioritization {
+        case .quality:
+            return .quality
+        case .balanced:
+            return .balanced
+        case .speed:
+            return .speed
+        @unknown default:
+            return .speed
         }
     }
 
