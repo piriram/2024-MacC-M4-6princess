@@ -41,8 +41,12 @@ class DFEditViewModel: ObservableObject {
     let analyzer = ImageAnalyzer()
     let interaction = ImageAnalysisInteraction()
     private let imagePipeline: ImagePipelining = ImagePipelineService()
-    
-    
+    private let maskingService: SubjectMaskingServicing
+
+    init(maskingService: SubjectMaskingServicing = SubjectMaskingServiceFactory.makeDefault()) {
+        self.maskingService = maskingService
+    }
+
     func changeMessageOpacity() {
         for i in 0..<10 {
             DispatchQueue.main.asyncAfter(deadline: .now() + 2) {
@@ -283,21 +287,12 @@ class DFEditViewModel: ObservableObject {
     }
     
     private func createMask(from inputImage: CIImage) -> CIImage? {
-        let handler = VNImageRequestHandler(ciImage: inputImage)
-        let request = VNGenerateForegroundInstanceMaskRequest()
-        
         do {
-            try handler.perform([request])
-            
-            if let result = request.results?.first {
-                let mask = try result.generateScaledMaskForImage(forInstances: result.allInstances, from: handler)
-                return CIImage(cvPixelBuffer: mask)
-            }
+            return try maskingService.makeMask(from: inputImage)
         } catch {
-            print(error)
+            print("Mask 생성 실패: \(error)")
+            return nil
         }
-        
-        return nil
     }
     
     private func apply(mask: CIImage, to image: CIImage) -> CIImage? {
