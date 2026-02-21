@@ -16,6 +16,12 @@
 	</array>
 	<key>Localization native development region</key>
 	<string>Korea</string>
+	<key>NSCameraUsageDescription</key>
+	<string>카메라로 사진을 촬영해 프레임 편집 기능을 사용하기 위해 사용합니다.</string>
+	<key>NSPhotoLibraryAddUsageDescription</key>
+	<string>편집한 이미지를 사진 라이브러리에 저장하기 위해 사용합니다.</string>
+	<key>NSPhotoLibraryUsageDescription</key>
+	<string>포토 라이브러리에 접근해 이미지를 선택하고 저장하기 위해 사용합니다.</string>
 	<key>SKAdNetworkItems</key>
 	<array>
 		<dict>
