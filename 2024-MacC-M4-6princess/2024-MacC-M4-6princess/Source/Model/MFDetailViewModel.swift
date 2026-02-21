@@ -56,6 +56,57 @@ class MFDetailViewModel: ObservableObject {
         }
     }
 
+
+    func loadSubjectsForModify(frameId: UUID?, imageModel: ImageListModel) -> Bool {
+        imageModel.imageList.removeAll()
+
+        guard let service = storeImageService,
+              let frameId else {
+            return false
+        }
+
+        do {
+            let subjectRecords = try service.fetchSubjectRecords(for: frameId)
+
+            for (index, subject) in subjectRecords.enumerated() {
+                let newImage = SubjectImage()
+
+                if let image = subject.subImage,
+                   let originImage = subject.originalImage,
+                   let mask = subject.maskImage {
+                    newImage.image = UIImage(data: image)
+                    newImage.originalImage = UIImage(data: originImage)
+                    newImage.maskImage = UIImage(data: mask)
+                } else if let text = subject.text,
+                          let originText = subject.originalText {
+                    newImage.text = UIImage(data: text)
+                    newImage.textStyle = TextStyle(
+                        attributedString: NSAttributedString(string: ""),
+                        txt: originText,
+                        font: .modern,
+                        color: ColorPreset.colorPallete[0],
+                        alignment: .center,
+                        fontSize: 20
+                    )
+                } else if let sticker = subject.sticker {
+                    newImage.sticker = UIImage(data: sticker)
+                }
+
+                newImage.scale = subject.scale
+                newImage.angle = Angle.degrees(subject.angle)
+                newImage.offset = CGSize(width: subject.x, height: subject.y)
+                newImage.isTapped = index == subjectRecords.count - 1
+
+                imageModel.imageList.append(newImage)
+            }
+
+            return true
+        } catch {
+            print("Subject 로딩 실패: \(error)")
+            return false
+        }
+    }
+
     /// 선택된 이미지의 인덱스를 반환
     func indexOfSelectedImage() -> Int? {
         guard let selectedId = selectedImageId else { return nil }

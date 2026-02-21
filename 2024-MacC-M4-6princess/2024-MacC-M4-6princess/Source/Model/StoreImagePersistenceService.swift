@@ -11,9 +11,23 @@ struct StoreImageRecord {
     let imageData: Data?
 }
 
+struct StoredSubjectRecord {
+    let subImage: Data?
+    let originalImage: Data?
+    let maskImage: Data?
+    let text: Data?
+    let originalText: String?
+    let sticker: Data?
+    let scale: Double
+    let angle: Double
+    let x: Double
+    let y: Double
+}
+
 protocol StoreImagePersisting {
     func fetchRecords(sort: StoreImageSortOption) throws -> [StoreImageRecord]
     func fetchImageData(for id: UUID) throws -> Data?
+    func fetchSubjectRecords(for id: UUID) throws -> [StoredSubjectRecord]
     func deleteImage(id: UUID) throws
     func deleteImages(ids: Set<UUID>) throws
 }
@@ -48,6 +62,28 @@ final class StoreImagePersistenceService: StoreImagePersisting {
         return try context.fetch(request).first?.image
     }
 
+    func fetchSubjectRecords(for id: UUID) throws -> [StoredSubjectRecord] {
+        guard let storeImage = try fetchStoreImage(for: id),
+              let subjects = storeImage.subjects?.allObjects as? [Subject] else {
+            return []
+        }
+
+        return subjects.map { subject in
+            StoredSubjectRecord(
+                subImage: subject.subImage,
+                originalImage: subject.originalImage,
+                maskImage: subject.maskImage,
+                text: subject.text,
+                originalText: subject.originalText,
+                sticker: subject.sticker,
+                scale: subject.scale,
+                angle: subject.angle,
+                x: subject.x,
+                y: subject.y
+            )
+        }
+    }
+
     func deleteImage(id: UUID) throws {
         let request: NSFetchRequest<StoreImages> = StoreImages.fetchRequest()
         request.predicate = NSPredicate(format: "uuid == %@", id as CVarArg)
@@ -70,5 +106,12 @@ final class StoreImagePersistenceService: StoreImagePersisting {
         }
 
         try context.save()
+    }
+
+    private func fetchStoreImage(for id: UUID) throws -> StoreImages? {
+        let request: NSFetchRequest<StoreImages> = StoreImages.fetchRequest()
+        request.predicate = NSPredicate(format: "uuid == %@", id as CVarArg)
+        request.fetchLimit = 1
+        return try context.fetch(request).first
     }
 }
