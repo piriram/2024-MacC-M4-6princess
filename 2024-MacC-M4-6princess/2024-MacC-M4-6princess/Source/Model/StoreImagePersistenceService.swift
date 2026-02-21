@@ -30,6 +30,7 @@ protocol StoreImagePersisting {
     func fetchSubjectRecords(for id: UUID) throws -> [StoredSubjectRecord]
     func deleteImage(id: UUID) throws
     func deleteImages(ids: Set<UUID>) throws
+    func deleteImagesAndReturnCount(ids: Set<UUID>) throws -> Int
 }
 
 final class StoreImagePersistenceService: StoreImagePersisting {
@@ -95,7 +96,11 @@ final class StoreImagePersistenceService: StoreImagePersisting {
     }
 
     func deleteImages(ids: Set<UUID>) throws {
-        guard !ids.isEmpty else { return }
+        _ = try deleteImagesAndReturnCount(ids: ids)
+    }
+
+    func deleteImagesAndReturnCount(ids: Set<UUID>) throws -> Int {
+        guard !ids.isEmpty else { return 0 }
 
         let request: NSFetchRequest<StoreImages> = StoreImages.fetchRequest()
         request.predicate = NSPredicate(format: "uuid IN %@", ids)
@@ -106,6 +111,7 @@ final class StoreImagePersistenceService: StoreImagePersisting {
         }
 
         try context.save()
+        return targets.count
     }
 
     private func fetchStoreImage(for id: UUID) throws -> StoreImages? {

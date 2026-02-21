@@ -25,15 +25,24 @@ protocol CameraSessionServicing {
 }
 
 final class CameraSessionService: CameraSessionServicing {
+    private let logger: (String) -> Void
+
+    init(logger: @escaping (String) -> Void = { print($0) }) {
+        self.logger = logger
+    }
+
     func requestVideoAuthorization(completion: @escaping (CameraAuthorizationState) -> Void) {
         let currentState = CameraAuthorizationState.from(AVCaptureDevice.authorizationStatus(for: .video))
 
         switch currentState {
         case .authorized, .denied, .restricted:
+            logger("[CameraSession] authorization=\(currentState)")
             completion(currentState)
         case .notDetermined:
             AVCaptureDevice.requestAccess(for: .video) { granted in
-                completion(granted ? .authorized : .denied)
+                let result: CameraAuthorizationState = granted ? .authorized : .denied
+                self.logger("[CameraSession] authorizationRequested result=\(result)")
+                completion(result)
             }
         }
     }
@@ -42,6 +51,7 @@ final class CameraSessionService: CameraSessionServicing {
         Task {
             if !session.isRunning {
                 session.startRunning()
+                logger("[CameraSession] started")
             }
         }
     }
@@ -50,6 +60,7 @@ final class CameraSessionService: CameraSessionServicing {
         Task {
             if session.isRunning {
                 session.stopRunning()
+                logger("[CameraSession] stopped")
             }
         }
     }

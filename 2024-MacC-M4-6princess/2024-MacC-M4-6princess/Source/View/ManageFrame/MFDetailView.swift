@@ -72,7 +72,6 @@ struct MFDetailView: View {
                     Button {
                         //                        frameManager.selectedFrame = viewModel.selectedImageId
                         frameManager.updateFrame = viewModel.selectedImageId
-                        print("업데이트할 프레임 \(frameManager.updateFrame)")
                         let didLoad = viewModel.loadSubjectsForModify(
                             frameId: frameManager.updateFrame,
                             imageModel: imageModel

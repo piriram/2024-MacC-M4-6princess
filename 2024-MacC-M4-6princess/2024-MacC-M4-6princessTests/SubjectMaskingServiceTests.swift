@@ -21,4 +21,13 @@ final class SubjectMaskingServiceTests: XCTestCase {
         XCTAssertFalse(String(describing: type(of: service)).contains("StubSubjectMaskingService"))
         #endif
     }
+
+    func testFactoryReturnsStubWhenUseStubMaskEnvIsSet() {
+        setenv("USE_STUB_MASK", "1", 1)
+        defer { unsetenv("USE_STUB_MASK") }
+
+        let service = SubjectMaskingServiceFactory.makeDefault()
+
+        XCTAssertTrue(String(describing: type(of: service)).contains("StubSubjectMaskingService"))
+    }
 }

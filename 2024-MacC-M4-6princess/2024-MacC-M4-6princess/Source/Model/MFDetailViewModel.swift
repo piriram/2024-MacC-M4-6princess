@@ -5,10 +5,18 @@ class MFDetailViewModel: ObservableObject {
     @Published var selectedImageId: UUID?
     @Published var isDeleteAlertDetail = false
     @Published var imageDataArray: [(id: UUID, data: Data)] = []
+    @Published var appError: AppError?
 
     private var storeImageService: StoreImagePersisting?
 
     init() { }
+
+    private func reportError(_ error: AppError, debug: String? = nil) {
+        appError = error
+        if let debug {
+            print(debug)
+        }
+    }
 
     func configure(context: NSManagedObjectContext, selectedId: UUID?) {
         self.storeImageService = StoreImagePersistenceService(context: context)
@@ -27,7 +35,7 @@ class MFDetailViewModel: ObservableObject {
                 return (id: record.id, data: imageData)
             }
         } catch {
-            print("이미지 로드 실패: \(error)")
+            reportError(.coreDataFetchFailed, debug: "이미지 로드 실패: \(error)")
         }
     }
 
@@ -38,7 +46,7 @@ class MFDetailViewModel: ObservableObject {
         do {
             return try service.fetchImageData(for: id)
         } catch {
-            print("이미지 로딩 실패: \(error)")
+            reportError(.coreDataFetchFailed, debug: "이미지 로딩 실패: \(error)")
             return nil
         }
     }
@@ -52,7 +60,7 @@ class MFDetailViewModel: ObservableObject {
             loadImages()
             completion()
         } catch {
-            print("삭제 실패: \(error)")
+            reportError(.coreDataSaveFailed, debug: "삭제 실패: \(error)")
         }
     }
 
@@ -102,7 +110,7 @@ class MFDetailViewModel: ObservableObject {
 
             return true
         } catch {
-            print("Subject 로딩 실패: \(error)")
+            reportError(.coreDataFetchFailed, debug: "Subject 로딩 실패: \(error)")
             return false
         }
     }
