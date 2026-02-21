@@ -9,7 +9,9 @@ class MFDetailViewModel: ObservableObject {
 
     private var storeImageService: StoreImagePersisting?
 
-    init() { }
+    init(storeImageService: StoreImagePersisting? = nil) {
+        self.storeImageService = storeImageService
+    }
 
     private func reportError(_ error: AppError, debug: String? = nil) {
         appError = error
@@ -19,7 +21,9 @@ class MFDetailViewModel: ObservableObject {
     }
 
     func configure(context: NSManagedObjectContext, selectedId: UUID?) {
-        self.storeImageService = StoreImagePersistenceService(context: context)
+        if storeImageService == nil {
+            self.storeImageService = StoreImagePersistenceService(context: context)
+        }
         self.selectedImageId = selectedId
         loadImages()
     }
