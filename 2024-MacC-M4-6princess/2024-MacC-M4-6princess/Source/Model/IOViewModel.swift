@@ -13,6 +13,7 @@ class IOViewModel: ObservableObject {
     /// for 에러 알림창
     @Published var showAlert: Bool = false
     @Published var alertMessage: String = ""
+    @Published var appError: AppError?
     
     @Published var frameBGSize: CGSize = .zero // 프레임상의 축소된 배경 이미지 크기
     var compositeImage:UIImage?
@@ -35,11 +36,11 @@ class IOViewModel: ObservableObject {
     @MainActor
     func renderAndSaveViewImage<T: View>(content: T, motionManager: MotionManager,orientation:UIDeviceOrientation) {
         guard frameBGSize.width > 0 , frameBGSize.height > 0 else {
-            showAlert(message: "화면 초기화 전입니다. 잠시 후 다시 시도해 주세요")
+            showError(.uiNotReady)
             return
         }
         guard let uiImage = renderImage(content, motionManager) else {
-            showAlert(message: "렌더링 실패: 다시 시도해주세요.\n에러가 반복될 시 캡쳐후 제보부탁드립니다.")
+            showError(.imageRenderingFailed)
             return
         }
 //        let rotatedImage = applyOrientationToImage(uiImage:uiImage,motionManager:motionManager)
@@ -49,7 +50,7 @@ class IOViewModel: ObservableObject {
                 self.saveImageToAlbum(uiImage: uiImage)
             }
             else{
-                self.showAlert(message: "사진 저장 권한이 필요합니다.\n 설정에서 권한 설정을 해주세요.")
+                self.showError(.photoLibraryPermissionDenied)
             }
         }
         /// 뷰를 uiImage로 변환
@@ -151,7 +152,7 @@ class IOViewModel: ObservableObject {
                         let fetchResult = PHAssetCollection.fetchAssetCollections(withLocalIdentifiers: [placeholder.localIdentifier], options: nil)
                         completion(fetchResult.firstObject)
                     } else {
-                        self.showAlert(message: "앨범 생성 실패: \(error?.localizedDescription ?? "알 수 없는 오류")")
+                        self.showError(.albumCreationFailed, detail: error?.localizedDescription)
                         completion(nil)
                     }
                 }
@@ -160,7 +161,7 @@ class IOViewModel: ObservableObject {
         
         func saveImageToAlbum(album: PHAssetCollection?) {
             guard let album = album else {
-                self.showAlert(message: "앨범을 찾을 수 없습니다.")
+                self.showError(.albumNotFound)
                 return
             }
             
@@ -177,7 +178,7 @@ class IOViewModel: ObservableObject {
                         print("사진이 앨범 '\(albumName)'에 성공적으로 저장되었습니다.")
                     } else {
                         let errorMessage = error?.localizedDescription ?? "알 수 없는 오류"
-                        showAction(message: "사진 저장 실패: \(errorMessage)", retryAction: {
+                        showAction(message: "\(AppError.photoSaveFailed.userMessage): \(errorMessage)", retryAction: {
                             // Retry the save action
                             saveImageToAlbum(album: album)
                         })
@@ -243,6 +244,18 @@ class IOViewModel: ObservableObject {
     func showAlert(message: String) {
         DispatchQueue.main.async {
             self.alertMessage = message
+            self.showAlert = true
+        }
+    }
+
+    func showError(_ error: AppError, detail: String? = nil) {
+        DispatchQueue.main.async {
+            self.appError = error
+            if let detail, !detail.isEmpty {
+                self.alertMessage = "\(error.userMessage)\n\(detail)"
+            } else {
+                self.alertMessage = error.userMessage
+            }
             self.showAlert = true
         }
     }

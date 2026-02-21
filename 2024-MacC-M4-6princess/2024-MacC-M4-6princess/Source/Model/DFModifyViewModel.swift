@@ -39,6 +39,7 @@ class DFModifyViewModel: ObservableObject {
     @Published var modelList: [SubjectImage] = []
     
     @Published var showAgain: Bool = false
+    @Published var appError: AppError?
     
     /// 레이어 변경 관련 변수
     @Published var isPressedUp = false
@@ -52,6 +53,13 @@ class DFModifyViewModel: ObservableObject {
     @Published var style:TextStyle = TextStyle(attributedString: NSAttributedString(string: ""), txt: "", font: .modern, color: ColorPreset.colorPallete[0], alignment: .center, fontSize: 20 )
     private let imagePipeline: ImagePipelining = ImagePipelineService()
     
+    private func reportError(_ error: AppError, debug: String? = nil) {
+        appError = error
+        if let debug {
+            print(debug)
+        }
+    }
+
     func backgroundGesture() -> some Gesture {
         
         MagnifyGesture()
@@ -232,7 +240,7 @@ class DFModifyViewModel: ObservableObject {
                 saveContext(context: viewContext)
                 
             } catch {
-                print("Error fetching frame: \(error)")
+                reportError(.coreDataFetchFailed, debug: "Error fetching frame: \(error)")
                 frameManager.resultImage = nil
             }
         }
@@ -246,7 +254,7 @@ class DFModifyViewModel: ObservableObject {
         do {
             try context.save()
         } catch {
-            print("Error saving managed object context: \(error)")
+            reportError(.coreDataSaveFailed, debug: "Error saving managed object context: \(error)")
         }
     }
     func addImage(albumImageData: Data?, context: NSManagedObjectContext, subjects: ImageListModel) {

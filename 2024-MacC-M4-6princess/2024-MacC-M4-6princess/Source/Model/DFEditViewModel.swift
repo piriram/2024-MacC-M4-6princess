@@ -34,6 +34,7 @@ class DFEditViewModel: ObservableObject {
     @Published var detectedObjects: Set<ImageAnalysisInteraction.Subject> = []
     @Published var clickedButton = false
     @Published var isRenderFailed = false
+    @Published var appError: AppError?
     
     @Published var toastMessageOpacity: CGFloat = 1
     @Published var removingLoadingOpacity: CGFloat = 0
@@ -45,6 +46,13 @@ class DFEditViewModel: ObservableObject {
 
     init(maskingService: SubjectMaskingServicing = SubjectMaskingServiceFactory.makeDefault()) {
         self.maskingService = maskingService
+    }
+
+    private func reportError(_ error: AppError, debug: String? = nil) {
+        appError = error
+        if let debug {
+            print(debug)
+        }
     }
 
     func changeMessageOpacity() {
@@ -234,7 +242,7 @@ class DFEditViewModel: ObservableObject {
         var resultImage: UIImage?
 
         guard let inputImage = CIImage(image: inputImage ?? UIImage()) else {
-            print("Failed to create CIImage")
+            reportError(.inputImageMissing, debug: "Failed to create CIImage")
             completionHandler(false)
             return
         }
@@ -244,7 +252,7 @@ class DFEditViewModel: ObservableObject {
                   let maskCIImage = CIImage(image: maskSource),
                   let outputImage = apply(mask: maskCIImage, to: inputImage),
                   let renderedImage = convertToUIImage(ciImage: outputImage) else {
-                print("Mask image is nil")
+                reportError(.maskCreationFailed, debug: "Mask image is nil")
                 completionHandler(false)
                 return
             }
@@ -261,13 +269,13 @@ class DFEditViewModel: ObservableObject {
         var resultImage: UIImage?
         
         guard let inputImage = CIImage(image: inputImage ?? UIImage()) else {
-            print("Failed to create CIImage")
+            reportError(.inputImageMissing, debug: "Failed to create CIImage")
             return
         }
         
         Task { @MainActor in
             guard let fakeMask = createMask(from: inputImage) else {
-                print("Failed to create mask")
+                reportError(.maskCreationFailed, debug: "Failed to create mask")
                 return
             }
             
@@ -275,7 +283,7 @@ class DFEditViewModel: ObservableObject {
                   let outputImage = apply(mask: maskImage, to: inputImage),
                   let renderedResult = convertToUIImage(ciImage: outputImage),
                   let renderedMask = convertToUIImage(ciImage: maskImage) else {
-                print("Failed to create mask")
+                reportError(.maskCreationFailed, debug: "Failed to create mask")
                 return
             }
 
@@ -290,7 +298,7 @@ class DFEditViewModel: ObservableObject {
         do {
             return try maskingService.makeMask(from: inputImage)
         } catch {
-            print("Mask 생성 실패: \(error)")
+            reportError(.maskCreationFailed, debug: "Mask 생성 실패: \(error)")
             return nil
         }
     }
@@ -307,7 +315,7 @@ class DFEditViewModel: ObservableObject {
     private func convertToUIImage(ciImage: CIImage) -> UIImage? {
         
         guard let cgImage = CIContext(options: nil).createCGImage(ciImage, from: ciImage.extent) else {
-            print("Failed to render CGImage")
+            reportError(.imageRenderingFailed, debug: "Failed to render CGImage")
             return nil
         }
         return UIImage(cgImage: cgImage)
