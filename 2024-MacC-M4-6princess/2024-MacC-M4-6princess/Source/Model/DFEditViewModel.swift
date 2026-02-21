@@ -40,6 +40,7 @@ class DFEditViewModel: ObservableObject {
     
     let analyzer = ImageAnalyzer()
     let interaction = ImageAnalysisInteraction()
+    private let imagePipeline: ImagePipelining = ImagePipelineService()
     
     
     func changeMessageOpacity() {
@@ -207,12 +208,7 @@ class DFEditViewModel: ObservableObject {
 //    }
     
     func scaleCompute(_ image: UIImage) -> CGFloat {
-        var scale: CGFloat = image.size.height / (UIScreen.main.bounds.width * 4/3)
-        
-        if image.size.width / scale > UIScreen.main.bounds.width || image.size.width >= image.size.height {
-            scale = image.size.width / UIScreen.main.bounds.width
-        }
-        return scale
+        imagePipeline.displayScale(for: image, screenWidth: UIScreen.main.bounds.width)
     }
     
     func reDo() {

@@ -50,6 +50,7 @@ class DFModifyViewModel: ObservableObject {
     var selectedStickerTab = StickerTab.bubble
     
     @Published var style:TextStyle = TextStyle(attributedString: NSAttributedString(string: ""), txt: "", font: .modern, color: ColorPreset.colorPallete[0], alignment: .center, fontSize: 20 )
+    private let imagePipeline: ImagePipelining = ImagePipelineService()
     
     func backgroundGesture() -> some Gesture {
         
@@ -155,10 +156,10 @@ class DFModifyViewModel: ObservableObject {
         
         Task {
             // 저장 완료 메시지 숨기기
-            let render = ImageRenderer(content: view.frame(width: UIScreen.main.bounds.width, height: UIScreen.main.bounds.width * 4/3))
-            //            render.scale = scaleCompute(inputImage)
-            render.scale = UIScreen.main.scale + 1
-            frameImage = render.uiImage
+            frameImage = imagePipeline.renderImage(
+                content: view.frame(width: UIScreen.main.bounds.width, height: UIScreen.main.bounds.width * 4/3),
+                scale: UIScreen.main.scale + 1
+            )
             addImage(albumImageData: frameImage?.pngData(), context: context, subjects: imageModel)
         }
         
@@ -184,10 +185,11 @@ class DFModifyViewModel: ObservableObject {
         
         Task {
             // 저장 완료 메시지 숨기기
-            let render = ImageRenderer(content: view.frame(width: UIScreen.main.bounds.width, height: UIScreen.main.bounds.width * 4/3))
-            render.scale = UIScreen.main.scale
-            frameImage = render.uiImage
-            
+            frameImage = imagePipeline.renderImage(
+                content: view.frame(width: UIScreen.main.bounds.width, height: UIScreen.main.bounds.width * 4/3),
+                scale: UIScreen.main.scale
+            )
+
             do {
                 let results = try viewContext.fetch(fetchRequest)
                 if let storedImage = results.first {
@@ -286,14 +288,7 @@ class DFModifyViewModel: ObservableObject {
     }
     
     func scaleCompute(_ image: UIImage) -> CGFloat {
-        
-        var scale: CGFloat = image.size.height / (UIScreen.main.bounds.width * 4/3)
-        
-        
-        if image.size.width / scale > UIScreen.main.bounds.width || image.size.width >= image.size.height {
-            scale = image.size.width / UIScreen.main.bounds.width
-        }
-        return scale
+        imagePipeline.displayScale(for: image, screenWidth: UIScreen.main.bounds.width)
     }
     
     func makeImageList() {
@@ -315,9 +310,7 @@ class DFModifyViewModel: ObservableObject {
             indexOfImageList = 0
         }
 
-        let render = ImageRenderer(content: view)
-        render.scale = scaleCompute(image)
-        guard let renderedImage = render.uiImage else { return nil }
+        guard let renderedImage = imagePipeline.renderImage(content: view, scale: scaleCompute(image)) else { return nil }
 
         if indexOfImageList < imageList.count - 1 {
             for _ in indexOfImageList+1..<imageList.count {
