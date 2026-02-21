@@ -99,3 +99,38 @@
 - 새로 생성되는 문자열/설정 파일에는 상단 헤더 주석 추가하지 않음
 - 다국어 문자열은 각 `.lproj/InfoPlist.strings`에 통합 관리
 - 핵심 설정 변경 전/후 빌드 확인 로그를 남김
+
+## 2-4. 이번 회차(2026-02-21) 실행: 카메라 Capture 흐름 Combine화
+
+### 적용 범위
+- 대상: `CameraManager`, `CameraViewModel`, `CameraTimerSecondsView`
+- 목적: `AVCapturePhotoCaptureDelegate`의 콜백 기반 촬영 처리를 Combine 이벤트 기반으로 정리하여 테스트 용이성/취소 제어/오류 전달 개선
+
+### 변경 내용
+1. **CameraManager**
+   - `takePicture()` 시그니처를 `()-> AnyPublisher<AVCapturePhoto, Error>`로 변경
+   - 내부적으로 `PassthroughSubject`를 생성해 `didFinishProcessingPhoto` 결과를 스트림으로 전달
+   - 카메라 세션 미실행/중복 촬영 요청 시 `CaptureError`(`sessionNotRunning`, `captureAlreadyInProgress`) 실패로 종료
+   - 무음 샷 동작(`AudioServicesDisposeSystemSoundID(1108)`)을 `CameraManager` 내부 delegate 훅으로 이동
+
+2. **CameraViewModel**
+   - `takePic()`에서 delegate 직접 전달 방식 제거
+   - `Combine` 체인으로 지연(0/0.5초) + 촬영 요청 + 완료/실패 처리 연결
+   - 기존 이미지 처리 로직(미러링/회전/크롭)을 `handleCapturedPhoto(_:)`로 분리해 가독성 정리
+   - 실패 시 `showErrorAlert` 연동 메시지 출력 강화
+
+3. **CameraTimerSecondsView**
+   - 타이머 시작 조건을 `delayTime > 0`로 가드
+   - `delayTime == 0`에서 분모 0 분할 잠재 오류 방지
+
+### 바로 다음 검증 항목
+- [ ] `xcodebuild` 테스트 실행 (전체 테스트 스위트)
+- [ ] 카메라 촬영 플로우 회귀 확인: 셔터 버튼 탭 시 0초/지연 촬영 모두 동작
+- [ ] 권한 미승인/세션 미시작 상태에서 오류 알림 노출 동작 점검
+- [ ] 빌드 경고/린트 에러 추가 점검
+
+### 실행 결과 (2026-02-21 회차)
+- [x] `xcodebuild test` 통과 (모든 테스트)
+- [x] `xcodebuild build` 통과
+- [x] 코드 변경: `CameraManager`/`CameraViewModel`/`CameraTimerSecondsView`
+- [x] 커밋: `c806e78` (`Refactor: Combine 기반 Camera 촬영 파이프라인 정리`)

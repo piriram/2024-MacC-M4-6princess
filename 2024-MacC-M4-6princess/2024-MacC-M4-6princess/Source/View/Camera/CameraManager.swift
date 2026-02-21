@@ -8,6 +8,8 @@
 import SwiftUI
 import AVFoundation
 import Photos
+import Combine
+import AudioToolbox
 
 protocol CameraManagerDelegate: AnyObject {
     func cameraManager(_ manager: CameraManager, didCapturePhoto photo: AVCapturePhoto)
@@ -23,7 +25,8 @@ class CameraManager: NSObject, AVCapturePhotoCaptureDelegate {
     @Published var startFactor: CGFloat = 2.0
     @Published var deviceType: AVCaptureDevice.DeviceType
     private let sessionService: CameraSessionServicing
-    
+    private var captureSubject: PassthroughSubject<AVCapturePhoto, Error>?
+
     init(session: AVCaptureSession = AVCaptureSession(),
          videoDeviceInput: AVCaptureDeviceInput? = nil,
          output: AVCapturePhotoOutput = AVCapturePhotoOutput(),
@@ -36,7 +39,7 @@ class CameraManager: NSObject, AVCapturePhotoCaptureDelegate {
         self.sessionService = sessionService
         super.init()
     }
-    
+
     enum AuthorizationStatus {
         case authorized
         case notDetermined
@@ -53,13 +56,27 @@ class CameraManager: NSObject, AVCapturePhotoCaptureDelegate {
             }
         }
     }
-    
+
     enum SetupResult {
         case success
         case failed(Error)
         case notAuthorized
     }
-    
+
+    enum CaptureError: Error, LocalizedError {
+        case sessionNotRunning
+        case captureAlreadyInProgress
+
+        var errorDescription: String? {
+            switch self {
+            case .sessionNotRunning:
+                return "카메라 세션이 아직 실행되지 않았습니다."
+            case .captureAlreadyInProgress:
+                return "이미 촬영이 진행 중입니다."
+            }
+        }
+    }
+
     //카메라 접근권한 체크 함수
     func checkVideoAuthorizaion() {
         sessionService.requestVideoAuthorization { [weak self] state in
@@ -78,7 +95,7 @@ class CameraManager: NSObject, AVCapturePhotoCaptureDelegate {
             }
         }
     }
-    
+
     //카메라를 처음에 세팅하는 함수
     func setUp() {
         do {
@@ -229,21 +246,73 @@ class CameraManager: NSObject, AVCapturePhotoCaptureDelegate {
     }
     
     //사진 처리를 시작하는 함수
-    func takePicture(delegate: AVCapturePhotoCaptureDelegate) {
+    func takePicture() -> AnyPublisher<AVCapturePhoto, Error> {
         guard session.isRunning else {
             print("세션이 실행중이지 않습니다")
-            return
+            return Fail(error: CaptureError.sessionNotRunning).eraseToAnyPublisher()
         }
+
+        guard captureSubject == nil else {
+            return Fail(error: CaptureError.captureAlreadyInProgress).eraseToAnyPublisher()
+        }
+
+        let subject = PassthroughSubject<AVCapturePhoto, Error>()
+        captureSubject = subject
         
         let settings = AVCapturePhotoSettings()
         settings.flashMode = .off
         
-        //여기서 이미지의 회전이 일어난 후 output에 넣어주기?
-        
         // 메인 스레드에서 실행
-        DispatchQueue.main.async {
-            self.output.capturePhoto(with: settings, delegate: delegate)
+        DispatchQueue.main.async { [weak self] in
+            guard let self else { return }
+            self.output.capturePhoto(with: settings, delegate: self)
         }
+
+        return subject
+            .handleEvents(receiveCancel: { [weak self] in
+                self?.captureSubject = nil
+            })
+            .eraseToAnyPublisher()
+    }
+    
+    func photoOutput(_ output: AVCapturePhotoOutput, didFinishProcessingPhoto photo: AVCapturePhoto, error: Error?) {
+        guard let subject = captureSubject else { return }
+        captureSubject = nil
+
+        if let error {
+            print("사진 처리 중 에러 발생: \(error.localizedDescription)")
+            delegate?.cameraManager(self, didFailWithError: error)
+            subject.send(completion: .failure(error))
+            return
+        }
+
+        subject.send(photo)
+        delegate?.cameraManager(self, didCapturePhoto: photo)
+        subject.send(completion: .finished)
+    }
+
+    func photoOutput(_ output: AVCapturePhotoOutput, willCapturePhotoFor resolvedSettings: AVCaptureResolvedPhotoSettings) {
+        AudioServicesDisposeSystemSoundID(1108)
+    }
+
+    func photoOutput(_ output: AVCapturePhotoOutput, didCapturePhotoFor resolvedSettings: AVCaptureResolvedPhotoSettings) {
+        AudioServicesDisposeSystemSoundID(1108)
+    }
+
+    func photoOutput(_ output: AVCapturePhotoOutput, didFailToCapturePhoto photo: AVCapturePhoto?, error: Error, from resolvedSettings: AVCaptureResolvedPhotoSettings) {
+        guard let subject = captureSubject else { return }
+        captureSubject = nil
+        print("사진 촬영 실패: \(error.localizedDescription)")
+        delegate?.cameraManager(self, didFailWithError: error)
+        subject.send(completion: .failure(error))
+    }
+
+    func photoOutput(_ output: AVCapturePhotoOutput, didFinishCaptureFor resolvedSettings: AVCaptureResolvedPhotoSettings, error: Error?) {
+        guard let subject = captureSubject, let error else { return }
+        captureSubject = nil
+        print("사진 촬영 완료 실패: \(error.localizedDescription)")
+        delegate?.cameraManager(self, didFailWithError: error)
+        subject.send(completion: .failure(error))
     }
     
     //줌 범위를 확인하고 부드럽게 해주는 줌 모션을 관리하는 함수
@@ -283,5 +352,3 @@ class CameraManager: NSObject, AVCapturePhotoCaptureDelegate {
         }
     }
 }
-
-

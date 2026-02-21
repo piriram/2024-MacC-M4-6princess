@@ -8,10 +8,10 @@
 import SwiftUI
 import AVFoundation
 import Photos
+import Combine
 
-class CameraViewModel: NSObject, ObservableObject, AVCapturePhotoCaptureDelegate {
+class CameraViewModel: NSObject, ObservableObject {
 
-    
     @Published var isTakenPhoto = false
     @Published var isAllTakenPhoto = false
     @Published var isSavedPhotoData = false
@@ -57,6 +57,7 @@ class CameraViewModel: NSObject, ObservableObject, AVCapturePhotoCaptureDelegate
     var ScreenSize:CGSize = UIScreen.main.bounds.size
     let cameraManager: CameraManager
     let motionManager = MotionManager()
+    private var cancellables: Set<AnyCancellable> = []
     
     init(cameraManager: CameraManager = CameraManager()) {
         self.cameraManager = cameraManager
@@ -79,23 +80,7 @@ class CameraViewModel: NSObject, ObservableObject, AVCapturePhotoCaptureDelegate
         preview.videoGravity = .resizeAspectFill
     }
     
-        //무음으로 작업할때만 사용하는 함수. 지우면 슬퍼요
-            func photoOutput(_ output: AVCapturePhotoOutput, willCapturePhotoFor resolvedSettings: AVCaptureResolvedPhotoSettings) {
-                print("카메라 셔터음 무음으로 변경됨")
-                AudioServicesDisposeSystemSoundID(1108)
-        
-            }
-            func photoOutput(_ output: AVCapturePhotoOutput, didCapturePhotoFor resolvedSettings: AVCaptureResolvedPhotoSettings) {
-                AudioServicesDisposeSystemSoundID(1108)
-            }
-    
-    
-    func photoOutput(_ output: AVCapturePhotoOutput, didFinishProcessingPhoto photo: AVCapturePhoto, error: Error?) {
-        if let error = error {
-            print("사진 처리 중 에러 발생: \(error.localizedDescription)")
-            return
-        }
-        
+    func handleCapturedPhoto(_ photo: AVCapturePhoto) {
         guard let imageData = photo.fileDataRepresentation() else {
             print("사진 데이터가 유효하지 않음")
             return
@@ -127,6 +112,15 @@ class CameraViewModel: NSObject, ObservableObject, AVCapturePhotoCaptureDelegate
             //            print("nextView:\(self.nextView)")
             //            print("이미지 사이즈: \(image.size)")
             print("사진이 성공적으로 처리되었습니다")
+            self.isTakenPhoto = false
+        }
+    }
+    
+    private func handleCaptureError(_ error: Error) {
+        DispatchQueue.main.async {
+            self.errorMessage = "촬영 실패: \(error.localizedDescription)"
+            self.showErrorAlert = true
+            self.isTakenPhoto = false
         }
     }
     
@@ -170,18 +164,33 @@ class CameraViewModel: NSObject, ObservableObject, AVCapturePhotoCaptureDelegate
     
     //셔터가 눌리면 실행되는 함수
     func takePic() {
-        // 메인 큐에서 실행
-        if !self.cameraManager.session.isRunning {
-            self.cameraManager.startSession()
-            // 세션이 시작될 때까지 잠시 대기
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
-                self.cameraManager.takePicture(delegate: self)
-                self.isTakenPhoto.toggle()
+        isTakenPhoto = true
+        let delay = cameraManager.session.isRunning ? 0.0 : 0.5
+
+        Just(())
+            .delay(for: .seconds(delay), scheduler: DispatchQueue.main)
+            .flatMap { [weak self] _ -> AnyPublisher<AVCapturePhoto, Error> in
+                guard let self else {
+                    return Fail(error: NSError(domain: "CameraViewModel", code: -1, userInfo: [NSLocalizedDescriptionKey: "카메라 뷰모델이 해제되었습니다."]))
+                        .eraseToAnyPublisher()
+                }
+                return self.cameraManager.takePicture()
             }
-        } else {
-            self.cameraManager.takePicture(delegate: self)
-            self.isTakenPhoto.toggle()
-        }
+            .receive(on: DispatchQueue.main)
+            .sink(
+                receiveCompletion: { [weak self] completion in
+                    switch completion {
+                    case .finished:
+                        break
+                    case .failure(let error):
+                        self?.handleCaptureError(error)
+                    }
+                },
+                receiveValue: { [weak self] photo in
+                    self?.handleCapturedPhoto(photo)
+                }
+            )
+            .store(in: &cancellables)
     }
     
     //카메라 전후면 전환(초기 줌 팩터를 다시 맞춰줌)
@@ -295,4 +304,3 @@ class CameraViewModel: NSObject, ObservableObject, AVCapturePhotoCaptureDelegate
     
 
 }
-
