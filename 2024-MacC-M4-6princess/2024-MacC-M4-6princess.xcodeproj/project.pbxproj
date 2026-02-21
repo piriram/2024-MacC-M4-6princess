@@ -54,6 +54,16 @@
 			path = "2024-MacC-M4-6princess";
 			sourceTree = "<group>";
 		};
+		A1D1E1F12E0A100000824592 /* 2024-MacC-M4-6princessTests */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			path = "2024-MacC-M4-6princessTests";
+			sourceTree = "<group>";
+		};
+		A1D1E1F22E0A100000824592 /* 2024-MacC-M4-6princessUITests */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			path = "2024-MacC-M4-6princessUITests";
+			sourceTree = "<group>";
+		};
 /* End PBXFileSystemSynchronizedRootGroup section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -101,6 +111,8 @@
 				4EA88E802DE49BF2009C920D /* InfoPlist.strings */,
 				4EB66FB62D8DE9650042B399 /* Localizable.xcstrings */,
 				89A94AB12CA9B64C00824592 /* 2024-MacC-M4-6princess */,
+				A1D1E1F12E0A100000824592 /* 2024-MacC-M4-6princessTests */,
+				A1D1E1F22E0A100000824592 /* 2024-MacC-M4-6princessUITests */,
 				898B159A2CFD8CCD00EA200A /* Frameworks */,
 				89A94AB02CA9B64C00824592 /* Products */,
 			);
@@ -161,6 +173,9 @@
 			dependencies = (
 				89A94AC12CA9B66300824592 /* PBXTargetDependency */,
 			);
+			fileSystemSynchronizedGroups = (
+				A1D1E1F12E0A100000824592 /* 2024-MacC-M4-6princessTests */,
+			);
 			name = "2024-MacC-M4-6princessTests";
 			packageProductDependencies = (
 			);
@@ -180,6 +195,9 @@
 			);
 			dependencies = (
 				89A94ACB2CA9B66300824592 /* PBXTargetDependency */,
+			);
+			fileSystemSynchronizedGroups = (
+				A1D1E1F22E0A100000824592 /* 2024-MacC-M4-6princessUITests */,
 			);
 			name = "2024-MacC-M4-6princessUITests";
 			packageProductDependencies = (
