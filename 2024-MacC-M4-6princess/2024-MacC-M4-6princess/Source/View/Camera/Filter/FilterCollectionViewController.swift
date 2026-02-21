@@ -323,7 +323,7 @@ class FilterCollectionViewController: UIViewController, UICollectionViewDelegate
             showAlert(message: "프레임이 선택되지 않았습니다. 프레임을 선택해주세요!")
             return
         }
-        
+
         guard viewModel.beginCapture() else {
             return
         }
@@ -336,6 +336,12 @@ class FilterCollectionViewController: UIViewController, UICollectionViewDelegate
 
         viewModel.isTakePic = true
         DispatchQueue.main.asyncAfter(deadline: DispatchTime.now() + viewModel.delayTime) {
+            guard self.frameManager.resultImage != nil else {
+                self.viewModel.resetCaptureState()
+                self.showAlert(message: "프레임 로드가 지연되어 촬영할 수 없습니다. 다시 시도해주세요.")
+                return
+            }
+            
             self.viewModel.takePic()
             Analytics.logEvent("A1_셔터버튼눌림", parameters: nil)
         }

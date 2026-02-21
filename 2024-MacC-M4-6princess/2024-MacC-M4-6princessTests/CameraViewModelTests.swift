@@ -115,8 +115,9 @@ final class CameraViewModelTests: XCTestCase {
         sut.takePic()
 
         sut.cancelCaptureIfNeeded()
-        XCTAssertEqual(sut.captureState, .idle)
+        XCTAssertEqual(sut.captureState, .cancelled)
         XCTAssertFalse(sut.isTakenPhoto)
         XCTAssertFalse(sut.routeToResult)
+        XCTAssertFalse(sut.isResultNavigationInProgress)
     }
 }

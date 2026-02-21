@@ -45,7 +45,11 @@ struct CameraView: View {
 
     private var resultNavigationBinding: Binding<Bool> {
         Binding(
-            get: { viewModel.routeToResult },
+            get: {
+                viewModel.captureState == .readyToNavigate &&
+                viewModel.routeToResult &&
+                !viewModel.isResultNavigationInProgress
+            },
             set: { isPresented in
                 if !isPresented {
                     viewModel.finishResultNavigation()
@@ -134,9 +138,13 @@ struct CameraView: View {
         .navigationDestination(isPresented: resultNavigationBinding) {
             if let takenImg = viewModel.takenImg, let frameImg = frameManager.resultImage {
                 IOView(bg: takenImg, idol: frameImg, motionManager: motionManager)
+                    .onAppear {
+                        viewModel.beginResultNavigation()
+                    }
             } else {
                 EmptyView()
                     .onAppear {
+                        viewModel.beginResultNavigation()
                         viewModel.errorMessage = "프레임이 없습니다. 다시 촬영해주세요."
                         viewModel.showErrorAlert = true
                         viewModel.finishResultNavigation()

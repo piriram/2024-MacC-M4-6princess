@@ -16,8 +16,10 @@ enum CapturePipelineState: Equatable {
     case capturing
     case processing
     case readyToNavigate
+    case saving
     case completed
     case failed
+    case cancelled
 }
 
 enum CapturePipelineError: Error, LocalizedError {
@@ -51,7 +53,7 @@ class CameraViewModel: NSObject, ObservableObject {
     // 캡처 플로우 상태
     @Published private(set) var captureState: CapturePipelineState = .idle
     @Published private(set) var routeToResult: Bool = false
-
+    @Published private(set) var isResultNavigationInProgress: Bool = false
     // 기존 뷰에서 쓰던 하위호환 플래그
     @Published var frameSize = CGRect(origin: .zero, size: .zero)
     @Published var preview: AVCaptureVideoPreviewLayer!
@@ -116,7 +118,10 @@ class CameraViewModel: NSObject, ObservableObject {
     }
 
     func handleCapturedPhoto(_ photo: AVCapturePhoto) {
-        guard !routeToResult else { return }
+        guard !routeToResult,
+              captureState != .readyToNavigate,
+              !isResultNavigationInProgress else { return }
+
         do {
             let image = try makeCapturedImage(from: photo)
             applyCapturedPhoto(image)
@@ -126,16 +131,21 @@ class CameraViewModel: NSObject, ObservableObject {
     }
 
     private func applyCapturedPhoto(_ image: UIImage) {
-        guard captureState != .readyToNavigate else { return }
+        guard !routeToResult,
+              !isResultNavigationInProgress,
+              captureState != .readyToNavigate else {
+            return
+        }
 
         self.picData = image.jpegData(compressionQuality: 1.0) ?? Data()
         self.takenImg = image
+
+        self.captureState = .readyToNavigate
         self.routeToResult = true
         print("사진이 성공적으로 처리되었습니다")
 
         self.isTakenPhoto = false
         self.isTakePic = false
-        self.captureState = .readyToNavigate
     }
 
     private func makeCapturedImage(from photo: AVCapturePhoto) throws -> UIImage {
@@ -179,6 +189,7 @@ class CameraViewModel: NSObject, ObservableObject {
             self.isTakePic = false
             self.captureState = .failed
             self.routeToResult = false
+            self.isResultNavigationInProgress = false
         }
     }
 
@@ -222,11 +233,19 @@ class CameraViewModel: NSObject, ObservableObject {
 
     //셔터가 눌리면 실행되는 함수
     func takePic() {
-        if captureState != .scheduled && captureState != .readyToNavigate {
-            guard captureState == .idle || captureState == .completed || captureState == .failed else {
-                return
-            }
+        if isResultNavigationInProgress || routeToResult {
+            return
+        }
+
+        switch captureState {
+        case .scheduled:
+            break
+        case .idle, .completed, .failed:
             captureState = .scheduled
+        case .readyToNavigate, .saving, .cancelled:
+            return
+        default:
+            return
         }
 
         let delay = cameraManager.session.isRunning ? 0.0 : 0.5
@@ -252,14 +271,16 @@ class CameraViewModel: NSObject, ObservableObject {
                 receiveCompletion: { [weak self] completion in
                     guard let self else { return }
                     self.isTakenPhoto = false
+                    self.isTakePic = false
+
                     if case .failure(let error) = completion {
                         self.handleCaptureError(error)
-                    } else {
-                        self.isTakePic = false
                     }
                 },
                 receiveValue: { [weak self] image in
-                    self?.applyCapturedPhoto(image)
+                    guard let self else { return }
+                    self.captureState = .saving
+                    self.applyCapturedPhoto(image)
                 }
             )
             .store(in: &cancellables)
@@ -267,12 +288,15 @@ class CameraViewModel: NSObject, ObservableObject {
 
     @discardableResult
     func beginCapture() -> Bool {
-        guard captureState == .idle || captureState == .completed || captureState == .failed else {
+        guard !isResultNavigationInProgress,
+              !routeToResult,
+              captureState == .idle || captureState == .completed || captureState == .failed else {
             return false
         }
 
         captureState = .scheduled
         routeToResult = false
+        isResultNavigationInProgress = false
         isTakenPhoto = true
         isTakePic = false
         showErrorAlert = false
@@ -280,11 +304,18 @@ class CameraViewModel: NSObject, ObservableObject {
         return true
     }
 
+    func beginResultNavigation() {
+        isResultNavigationInProgress = true
+    }
+
     func finishResultNavigation() {
         routeToResult = false
+        isResultNavigationInProgress = false
+
         if captureState == .readyToNavigate {
             captureState = .completed
         }
+
         isTakePic = false
         isTakenPhoto = false
     }
@@ -299,10 +330,11 @@ class CameraViewModel: NSObject, ObservableObject {
         if showCancellationError {
             handleCaptureError(NSError(domain: "CameraViewModel", code: -1, userInfo: [NSLocalizedDescriptionKey: "촬영이 취소되었습니다."]))
         } else {
-            captureState = .idle
+            captureState = .cancelled
             isTakenPhoto = false
             isTakePic = false
             routeToResult = false
+            isResultNavigationInProgress = false
             showErrorAlert = false
             errorMessage = ""
         }
@@ -312,10 +344,12 @@ class CameraViewModel: NSObject, ObservableObject {
         if captureState == .scheduled || captureState == .capturing || captureState == .processing {
             cancellables.removeAll()
         }
+
         captureState = .idle
         isTakenPhoto = false
         isTakePic = false
         routeToResult = false
+        isResultNavigationInProgress = false
         showErrorAlert = false
         errorMessage = ""
     }
