@@ -185,3 +185,25 @@
 - [x] `xcodebuild build` 통과
 - [x] 런타임 오류 패턴 `세션이 실행중이지 않습니다` 대응(샷 직전 강제 stop 제거)
 - [ ] 실제 시뮬레이터/디바이스 런 검증은 다음 사용자 테스트에서 확인 예정
+
+## 2-7. 즉시 대응: 촬영 중복 호출/세션 경합 방지
+
+### 적용 범위
+- `FilterCollectionViewController.swift`
+- `CameraViewModel.swift`
+
+### 조치
+- 셔터 버튼 탭에서 즉시 `beginCapture()`로 캡처 게이트를 선점
+- 동일 셔터 중복 호출 시 즉시 무시하여 `이미 촬영이 진행 중입니다` 오류 경로를 차단
+- 실패/완료 후 `isTakenPhoto` 상태를 확실히 해제해 재시도 가능 상태 유지
+
+### 구현 내용
+- `CameraViewModel.beginCapture() -> Bool` 추가 (캡처 인플라이트 가드)
+- `shutterButtonTapped()`에서 beginCapture 실패 시 처리 스킵
+- `takePic()` completion에서 상태 플래그 해제 보장(성공/실패 공통 경로)
+
+### 테스트/검증
+- [x] `xcodebuild test -project ... -scheme ... -destination ...` 통과
+- [x] `xcodebuild build -project ... -scheme ... -destination ...` 통과
+- [ ] 결과 화면(네비게이션) 진입 지연 타이밍은 실제 디바이스/시뮬레이터 동작으로 재확인 예정
+

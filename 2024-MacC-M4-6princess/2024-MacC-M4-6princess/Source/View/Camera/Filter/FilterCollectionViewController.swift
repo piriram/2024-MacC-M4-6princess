@@ -315,6 +315,10 @@ class FilterCollectionViewController: UIViewController, UICollectionViewDelegate
             return
         }
         
+        guard viewModel.beginCapture() else {
+            return
+        }
+
         if frameManager.resultImage != nil {
             viewModel.isTakePic = true
             DispatchQueue.main.asyncAfter(deadline: DispatchTime.now() + viewModel.delayTime) {
@@ -322,6 +326,7 @@ class FilterCollectionViewController: UIViewController, UICollectionViewDelegate
                 Analytics.logEvent("A1_셔터버튼눌림", parameters: nil)
             }
         } else {
+            viewModel.isTakenPhoto = false
             showAlert(message: "프레임이 선택되지 않았습니다. 프레임을 선택해주세요!")
         }
     }

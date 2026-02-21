@@ -81,6 +81,7 @@ class CameraViewModel: NSObject, ObservableObject {
     }
     
     func handleCapturedPhoto(_ photo: AVCapturePhoto) {
+        guard !nextView else { return }
         guard let imageData = photo.fileDataRepresentation() else {
             print("사진 데이터가 유효하지 않음")
             return
@@ -164,7 +165,6 @@ class CameraViewModel: NSObject, ObservableObject {
     
     //셔터가 눌리면 실행되는 함수
     func takePic() {
-        isTakenPhoto = true
         let delay = cameraManager.session.isRunning ? 0.0 : 0.5
 
         Just(())
@@ -179,11 +179,13 @@ class CameraViewModel: NSObject, ObservableObject {
             .receive(on: DispatchQueue.main)
             .sink(
                 receiveCompletion: { [weak self] completion in
+                    guard let self else { return }
+                    self.isTakenPhoto = false
                     switch completion {
                     case .finished:
                         break
                     case .failure(let error):
-                        self?.handleCaptureError(error)
+                        self.handleCaptureError(error)
                     }
                 },
                 receiveValue: { [weak self] photo in
@@ -191,6 +193,13 @@ class CameraViewModel: NSObject, ObservableObject {
                 }
             )
             .store(in: &cancellables)
+    }
+
+    @discardableResult
+    func beginCapture() -> Bool {
+        guard !isTakenPhoto else { return false }
+        isTakenPhoto = true
+        return true
     }
     
     //카메라 전후면 전환(초기 줌 팩터를 다시 맞춰줌)
