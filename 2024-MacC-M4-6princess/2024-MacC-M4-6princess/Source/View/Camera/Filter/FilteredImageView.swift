@@ -31,9 +31,15 @@ struct FilteredImageView: View {
             }
 //            .frame(height: 124)
             .onAppear {
-                reloadFilterImages()
+                DispatchQueue.global(qos: .userInitiated).async {
+                    viewModel.cameraManager.session.startRunning()
+                    DispatchQueue.main.async {
+                        reloadFilterImages()
+                    }
+                }
             }
             .onDisappear {
+                viewModel.cameraManager.stopSession()
                 reloadFilterImages()
             }
             .onChange(of: frameManager.resultImage) { oldValue, newValue in
