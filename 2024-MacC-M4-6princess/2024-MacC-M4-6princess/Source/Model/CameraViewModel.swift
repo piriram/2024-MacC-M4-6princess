@@ -64,13 +64,7 @@ class CameraViewModel: NSObject, ObservableObject, AVCapturePhotoCaptureDelegate
         self.defaultImg = UIImage(named: "whiteBG") ?? UIImage()
         super.init()
         setupPreviewLayer()
-        
-        if cameraManager.deviceType == .builtInWideAngleCamera {
-            self.currentZoomFactor = 2.0
-        }
-        else {
-            self.currentZoomFactor = 1.0
-        }
+        self.currentZoomFactor = 1.0
         _ = motionManager
     }
     
@@ -95,38 +89,42 @@ class CameraViewModel: NSObject, ObservableObject, AVCapturePhotoCaptureDelegate
             print("사진 처리 중 에러 발생: \(error.localizedDescription)")
             return
         }
-        
+
         guard let imageData = photo.fileDataRepresentation() else {
             print("사진 데이터가 유효하지 않음")
             return
         }
-        
-        guard var image = UIImage(data: imageData) else {
+
+        guard let sourceImage = UIImage(data: imageData) else {
             print("이미지를 생성할 수 없습니다.")
             return
         }
-        
-        // 전면 카메라일 경우 좌우 반전 처리
-        if self.cameraManager.videoDeviceInput?.device.position == .front {
-            guard let mirroredCGImage = image.cgImage else {
-                print("전면 카메라 이미지 처리 실패: cgImage 없음")
-                return
+
+        let isFrontCamera = self.cameraManager.videoDeviceInput?.device.position == .front
+
+        DispatchQueue.global(qos: .userInitiated).async {
+            var image = sourceImage
+
+            // 전면 카메라일 경우 좌우 반전 처리
+            if isFrontCamera {
+                guard let mirroredCGImage = image.cgImage else {
+                    print("전면 카메라 이미지 처리 실패: cgImage 없음")
+                    return
+                }
+                image = UIImage(cgImage: mirroredCGImage, scale: image.scale, orientation: .leftMirrored)
             }
-            image = UIImage(cgImage: mirroredCGImage, scale: image.scale, orientation: .leftMirrored)
-        }
-        
-        // 이미지의 방향을 .up으로 수정. 이미지 프리뷰를 위함
-        image = fixOrientation(image)
-        
-        let croppedImage = cropToAspectRatio(image: image)
-        
-        DispatchQueue.main.async {
-            self.picData = croppedImage.jpegData(compressionQuality: 1.0) ?? Data()
-            self.takenImg = croppedImage
-            self.nextView = true
-            //            print("nextView:\(self.nextView)")
-            //            print("이미지 사이즈: \(image.size)")
-            print("사진이 성공적으로 처리되었습니다")
+
+            // 이미지의 방향을 .up으로 수정. 이미지 프리뷰를 위함
+            image = self.fixOrientation(image)
+            let croppedImage = self.cropToAspectRatio(image: image)
+            let imageData = croppedImage.jpegData(compressionQuality: 1.0) ?? Data()
+
+            DispatchQueue.main.async {
+                self.picData = imageData
+                self.takenImg = croppedImage
+                self.nextView = true
+                print("사진이 성공적으로 처리되었습니다")
+            }
         }
     }
     
@@ -188,18 +186,9 @@ class CameraViewModel: NSObject, ObservableObject, AVCapturePhotoCaptureDelegate
     func changeCamera() {
         cameraManager.changeCamera()
         cameraPosition = cameraManager.videoDeviceInput?.device.position ?? .back
-        
-        // 카메라 전환 시 적절한 초기 줌 팩터 설정
-        if cameraPosition == .back {
-            if cameraManager.deviceType == .builtInUltraWideCamera {
-                currentZoomFactor = 2.0
-            } else {
-                currentZoomFactor = 1.0
-            }
-        } else {
-            currentZoomFactor = 1.0
-        }
-        
+
+        currentZoomFactor = 1.0
+
         lastScale = 1.0
     }
     
@@ -229,15 +218,14 @@ class CameraViewModel: NSObject, ObservableObject, AVCapturePhotoCaptureDelegate
         // 현재 줌 상태에서 변화량을 적용
         var newZoomFactor = currentZoomFactor * delta
         
-        // 최소/최대 줌 팩터 제한
         if let device = cameraManager.videoDeviceInput?.device {
             let minZoom: CGFloat = 1.0
-            let maxZoom: CGFloat = device.deviceType == .builtInUltraWideCamera ? 4.0 : 3.0
+            let maxZoom: CGFloat = cameraManager.maxZoomFactor(for: device)
             newZoomFactor = min(max(newZoomFactor, minZoom), maxZoom)
-            
+
             // 줌 적용
             cameraManager.zoom(newZoomFactor)
-            
+
             // currentZoomFactor 실시간 업데이트
             withAnimation(.spring(response: 0.3, dampingFraction: 0.6)) {
                 currentZoomFactor = newZoomFactor
@@ -248,23 +236,16 @@ class CameraViewModel: NSObject, ObservableObject, AVCapturePhotoCaptureDelegate
     //해당 factor로 줌을 해주는 함수
     func setZoom(factor: CGFloat) {
         guard let device = cameraManager.videoDeviceInput?.device else { return }
-        
+        let maxZoom = cameraManager.maxZoomFactor(for: device)
+        let minZoom: CGFloat = 1.0
+        let clampedFactor = min(max(factor, minZoom), maxZoom)
+
         do {
             try device.lockForConfiguration()
-            let actualZoomFactor = if device.position == .back {
-                if cameraManager.deviceType == .builtInUltraWideCamera {
-                    factor
-                } else {
-                    factor * 2
-                }
-            } else {
-                factor
-            }
-            
-            device.ramp(toVideoZoomFactor: actualZoomFactor, withRate: 100.0)
-            device.videoZoomFactor = actualZoomFactor
+            device.ramp(toVideoZoomFactor: clampedFactor, withRate: 100.0)
+            device.videoZoomFactor = clampedFactor
             device.unlockForConfiguration()
-            currentZoomFactor = factor // 실제 줌 팩터 저장
+            currentZoomFactor = clampedFactor
         } catch {
             print("줌 설정 오류: \(error.localizedDescription)")
         }
@@ -278,19 +259,7 @@ class CameraViewModel: NSObject, ObservableObject, AVCapturePhotoCaptureDelegate
     
     //기기에 따른 줌 범위 설정
     func getZoomRange(for device: AVCaptureDevice) -> ClosedRange<CGFloat> {
-        if device.position == .back {
-            switch device.deviceType {
-            case .builtInUltraWideCamera:
-                return 2.0...4.0
-            case .builtInWideAngleCamera:
-                return 1.0...3.0
-            default:
-                return 1.0...device.maxAvailableVideoZoomFactor
-            }
-        } else {
-            // 전면 카메라는 1.0...3.0 범위 사용
-            return 1.0...3.0
-        }
+        return 1.0...cameraManager.maxZoomFactor(for: device)
     }
     
 

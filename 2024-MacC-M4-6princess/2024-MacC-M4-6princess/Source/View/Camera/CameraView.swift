@@ -143,7 +143,6 @@ struct CameraView: View {
                 viewModel.showOrientationAlert = true
             }
             viewModel.cameraManager.checkVideoAuthorizaion()
-            viewModel.cameraManager.startSession()
             viewModel.isTakePic = false
             Analytics.logEvent("A1_카메라", parameters: nil)
         }
