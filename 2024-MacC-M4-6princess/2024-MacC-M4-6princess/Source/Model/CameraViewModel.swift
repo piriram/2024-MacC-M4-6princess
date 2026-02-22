@@ -54,6 +54,7 @@ class CameraViewModel: NSObject, ObservableObject {
     @Published private(set) var captureState: CapturePipelineState = .idle
     @Published private(set) var routeToResult: Bool = false
     @Published private(set) var isResultNavigationInProgress: Bool = false
+    @Published private(set) var capturedFrameImage: UIImage?
     // 기존 뷰에서 쓰던 하위호환 플래그
     @Published var frameSize = CGRect(origin: .zero, size: .zero)
     @Published var preview: AVCaptureVideoPreviewLayer!
@@ -196,6 +197,7 @@ class CameraViewModel: NSObject, ObservableObject {
             self.isTakenPhoto = false
             self.isTakePic = false
             self.captureState = .failed
+            self.capturedFrameImage = nil
             self.routeToResult = false
             self.isResultNavigationInProgress = false
         }
@@ -295,7 +297,7 @@ class CameraViewModel: NSObject, ObservableObject {
     }
 
     @discardableResult
-    func beginCapture() -> Bool {
+    func beginCapture(frameSnapshot: UIImage? = nil) -> Bool {
         guard !isResultNavigationInProgress,
               !routeToResult,
               captureState == .idle || captureState == .completed || captureState == .failed else {
@@ -305,6 +307,7 @@ class CameraViewModel: NSObject, ObservableObject {
         captureState = .scheduled
         routeToResult = false
         isResultNavigationInProgress = false
+        capturedFrameImage = frameSnapshot
         isTakenPhoto = true
         isTakePic = false
         showErrorAlert = false
@@ -324,6 +327,7 @@ class CameraViewModel: NSObject, ObservableObject {
             captureState = .completed
         }
 
+        capturedFrameImage = nil
         isTakePic = false
         isTakenPhoto = false
     }
@@ -339,6 +343,7 @@ class CameraViewModel: NSObject, ObservableObject {
             handleCaptureError(NSError(domain: "CameraViewModel", code: -1, userInfo: [NSLocalizedDescriptionKey: "촬영이 취소되었습니다."]))
         } else {
             captureState = .cancelled
+            capturedFrameImage = nil
             isTakenPhoto = false
             isTakePic = false
             routeToResult = false
@@ -354,6 +359,7 @@ class CameraViewModel: NSObject, ObservableObject {
         }
 
         captureState = .idle
+        capturedFrameImage = nil
         isTakenPhoto = false
         isTakePic = false
         routeToResult = false

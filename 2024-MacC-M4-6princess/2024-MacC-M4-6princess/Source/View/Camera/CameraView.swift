@@ -145,7 +145,8 @@ struct CameraView: View {
         .statusBar(hidden: true)
         .navigationBarBackButtonHidden()
         .navigationDestination(isPresented: resultNavigationBinding) {
-            if let takenImg = viewModel.takenImg, let frameImg = frameManager.resultImage {
+            if let takenImg = viewModel.takenImg,
+               let frameImg = viewModel.capturedFrameImage ?? frameManager.resultImage {
                 IOView(bg: takenImg, idol: frameImg, motionManager: motionManager)
                     .onAppear {
                         viewModel.beginResultNavigation()
