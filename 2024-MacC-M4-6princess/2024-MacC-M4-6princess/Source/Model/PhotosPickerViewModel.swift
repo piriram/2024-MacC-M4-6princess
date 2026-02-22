@@ -1,11 +1,39 @@
 import SwiftUI
 import Photos
 
+enum PhotoImportQualityOption: String, CaseIterable, Identifiable {
+    case original
+    case high
+    case standard
+
+    var id: String { rawValue }
+
+    var title: String {
+        switch self {
+        case .original: return "원본"
+        case .high: return "고화질"
+        case .standard: return "표준"
+        }
+    }
+
+    var maxLongEdge: CGFloat? {
+        switch self {
+        case .original:
+            return nil
+        case .high:
+            return 4096
+        case .standard:
+            return 2048
+        }
+    }
+}
+
 class PhotosPickerViewModel: ObservableObject {
     private enum Constants {
         static let pageSize = 60
         static let thumbnailTargetSize = CGSize(width: 180, height: 180)
         static let prefetchMargin = 30
+        static let qualityOptionKey = "photo.import.quality.option"
     }
 
     @Published var models: [PickedImageModel] = []
@@ -15,6 +43,7 @@ class PhotosPickerViewModel: ObservableObject {
     @Published var fetchedAlbum: Int = Constants.pageSize
     @Published var firstAppear: Bool = true
     @Published var canLoadMorePages: Bool = false
+    @Published var selectedImportQuality: PhotoImportQualityOption = .original
 
     private let imageManager = PHCachingImageManager()
     private var isLoadingPage: Bool = false
@@ -25,6 +54,15 @@ class PhotosPickerViewModel: ObservableObject {
     var offset: CGFloat = 0
     var originOffset: CGFloat = 0
     var isCheckedOriginOffset: Bool = false
+
+    init() {
+        selectedImportQuality = Self.loadQualityOption()
+    }
+
+    func updateImportQuality(_ option: PhotoImportQualityOption, userDefaults: UserDefaults = .standard) {
+        selectedImportQuality = option
+        userDefaults.set(option.rawValue, forKey: Constants.qualityOptionKey)
+    }
 
     func setViewSize(_ size: CGSize) {
         self.viewSize = size
@@ -137,8 +175,11 @@ class PhotosPickerViewModel: ObservableObject {
                     return
                 }
 
-                self.outputImage = fullResolutionImage
-                completionHandler(fullResolutionImage)
+                let processed = self.processedImage(from: fullResolutionImage)
+                print("[PhotoImport] quality=\(self.selectedImportQuality.rawValue) original=\(Int(fullResolutionImage.size.width))x\(Int(fullResolutionImage.size.height)) output=\(Int(processed.size.width))x\(Int(processed.size.height))")
+
+                self.outputImage = processed
+                completionHandler(processed)
             }
         }
     }
@@ -191,6 +232,21 @@ class PhotosPickerViewModel: ObservableObject {
         }
     }
 
+    private func processedImage(from source: UIImage) -> UIImage {
+        guard let maxLongEdge = selectedImportQuality.maxLongEdge else {
+            return source
+        }
+        return source.resized(maxLongEdge: maxLongEdge) ?? source
+    }
+
+    private static func loadQualityOption(userDefaults: UserDefaults = .standard) -> PhotoImportQualityOption {
+        guard let raw = userDefaults.string(forKey: Constants.qualityOptionKey),
+              let value = PhotoImportQualityOption(rawValue: raw) else {
+            return .original
+        }
+        return value
+    }
+
     private func thumbnailRequestOptions() -> PHImageRequestOptions {
         let requestOptions = PHImageRequestOptions()
         requestOptions.isNetworkAccessAllowed = true
@@ -198,5 +254,27 @@ class PhotosPickerViewModel: ObservableObject {
         requestOptions.resizeMode = .fast
         requestOptions.isSynchronous = false
         return requestOptions
+    }
+}
+
+private extension UIImage {
+    func resized(maxLongEdge: CGFloat) -> UIImage? {
+        let longEdge = max(size.width, size.height)
+        guard longEdge > maxLongEdge, longEdge > 0 else {
+            return self
+        }
+
+        let ratio = maxLongEdge / longEdge
+        let targetSize = CGSize(width: floor(size.width * ratio), height: floor(size.height * ratio))
+        guard targetSize.width > 0, targetSize.height > 0 else { return self }
+
+        let format = UIGraphicsImageRendererFormat.default()
+        format.scale = 1
+        format.opaque = false
+        let renderer = UIGraphicsImageRenderer(size: targetSize, format: format)
+
+        return renderer.image { _ in
+            draw(in: CGRect(origin: .zero, size: targetSize))
+        }
     }
 }

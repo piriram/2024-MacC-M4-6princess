@@ -16,6 +16,7 @@ struct PhotosPickerView: View {
         ZStack {
             VStack {
                 toolbarButton
+                qualityOptionPicker
                 if vm.models.isEmpty && permissionChecked {
                     emptyStateView
                         .padding(.top, 40)
@@ -151,6 +152,20 @@ extension PhotosPickerView {
                 .padding(.horizontal, 24)
         }
         .frame(maxWidth: .infinity)
+    }
+
+    var qualityOptionPicker: some View {
+        Picker("가져오기 품질", selection: Binding(
+            get: { vm.selectedImportQuality },
+            set: { vm.updateImportQuality($0) }
+        )) {
+            ForEach(PhotoImportQualityOption.allCases) { option in
+                Text(option.title).tag(option)
+            }
+        }
+        .pickerStyle(.segmented)
+        .padding(.horizontal, 20)
+        .padding(.top, 8)
     }
 
     var toolbarButton: some View {
