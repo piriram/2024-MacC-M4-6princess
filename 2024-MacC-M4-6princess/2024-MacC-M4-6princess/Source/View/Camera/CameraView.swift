@@ -143,6 +143,59 @@ private struct CameraUIKitContainerView: UIViewControllerRepresentable {
 }
 
 private final class CameraUIKitViewController: UIViewController {
+    private enum ZoomOption: Double {
+        case ultraWide = 1.0
+        case wide = 2.0
+        case telephoto = 3.0
+        case maxZoom = 4.0
+
+        func displayText(for position: AVCaptureDevice.Position, currentZoom: CGFloat, isUltraWide: Bool) -> String {
+            if position == .back {
+                if isUltraWide {
+                    switch currentZoom {
+                    case 1.0..<1.9: return ".5"
+                    case 1.9..<2.9: return "1"
+                    case 2.9..<3.9: return "2"
+                    default: return "3"
+                    }
+                } else {
+                    switch currentZoom {
+                    case 1.0..<1.9: return "1"
+                    case 1.9..<2.9: return "2"
+                    default: return "3"
+                    }
+                }
+            } else {
+                switch self {
+                case .ultraWide: return "1"
+                case .wide: return "2"
+                case .telephoto, .maxZoom: return "3"
+                }
+            }
+        }
+
+        func zoomFactor(for position: AVCaptureDevice.Position) -> CGFloat {
+            if position == .back {
+                switch self {
+                case .ultraWide: return 1.0
+                case .wide: return 2.0
+                case .telephoto: return 3.0
+                case .maxZoom: return 4.0
+                }
+            } else {
+                switch self {
+                case .ultraWide: return 1.0
+                case .wide: return 2.0
+                case .telephoto, .maxZoom: return 3.0
+                }
+            }
+        }
+
+        var tag: Int {
+            Int(rawValue * 10)
+        }
+    }
+
     private var viewModel: CameraViewModel
     private var motionManager: MotionManager
     private var naviManager: NavigationManager
@@ -156,16 +209,43 @@ private final class CameraUIKitViewController: UIViewController {
     private let zoomContainerView = UIView()
     private let bottomContainerView = UIView()
 
-    private var topHostingController: UIHostingController<AnyView>?
-    private var zoomHostingController: UIHostingController<AnyView>?
-    private var bottomHostingController: UIHostingController<AnyView>?
-    private var filterHostingController: UIHostingController<AnyView>?
+    private let timerControlView = CameraTimerControlView()
+    private let cameraSwitchButton = UIButton(type: .custom)
+#if DEBUG
+    private let debugButton = UIButton(type: .system)
+#endif
+
+    private let zoomBackgroundView = UIView()
+    private let zoomStackView = UIStackView()
+
+    private let bottomOverlayView = UIView()
+    private let newFrameButton = UIButton(type: .custom)
+    private let newFrameIconView = UIImageView()
+    private let newFrameLabel = UILabel()
+
+    private let filterHostView = UIView()
+    private var filterCollectionController: FilterCollectionViewController?
+    private var filterCollectionSignature: [String] = []
+
+    private var filterOverlayHostingController: UIHostingController<AnyView>?
 
     private var previewWidthConstraint: Constraint?
     private var previewHeightConstraint: Constraint?
     private var bottomHeightConstraint: Constraint?
+    private var bottomOverlayTopInsetConstraint: Constraint?
+
+    private var newFrameButtonWidthConstraint: Constraint?
+    private var newFrameButtonHeightConstraint: Constraint?
+    private var newFrameIconWidthConstraint: Constraint?
+    private var newFrameIconHeightConstraint: Constraint?
+
+    private var isTallScreenLayout = true
 
     private var cancellables = Set<AnyCancellable>()
+    private var contextSaveObserver: NSObjectProtocol?
+
+    private var zoomButtons: [Int: UIButton] = [:]
+    private var currentZoomOptions: [ZoomOption] = []
 
     init(
         viewModel: CameraViewModel,
@@ -189,15 +269,36 @@ private final class CameraUIKitViewController: UIViewController {
         fatalError("init(coder:) has not been implemented")
     }
 
+    deinit {
+        if let contextSaveObserver {
+            NotificationCenter.default.removeObserver(contextSaveObserver)
+        }
+    }
+
     override func viewDidLoad() {
         super.viewDidLoad()
         setupViews()
         setupLayout()
-        setupHostingControllers()
         bindState()
+
         updateLayoutForCurrentBounds()
         updatePreviewContent()
         updateFilterOverlay()
+        timerControlView.update(delayTime: viewModel.delayTime)
+        rebuildZoomButtonsIfNeeded(force: true)
+        updateZoomButtonsAppearance(animated: false)
+        setupFilterCollectionControllerIfNeeded()
+    }
+
+    override func viewDidAppear(_ animated: Bool) {
+        super.viewDidAppear(animated)
+        viewModel.startCameraSession()
+        refreshFilterCollectionController(forceReload: false)
+    }
+
+    override func viewWillDisappear(_ animated: Bool) {
+        super.viewWillDisappear(animated)
+        viewModel.stopCameraSession()
     }
 
     override func viewDidLayoutSubviews() {
@@ -221,7 +322,10 @@ private final class CameraUIKitViewController: UIViewController {
         self.imageModel = imageModel
         self.viewContext = viewContext
 
-        refreshHostingRootViews()
+        timerControlView.update(delayTime: viewModel.delayTime)
+        refreshFilterCollectionController(forceReload: false)
+        rebuildZoomButtonsIfNeeded(force: true)
+        updateZoomButtonsAppearance(animated: false)
         updateLayoutForCurrentBounds()
         updatePreviewContent()
         updateFilterOverlay()
@@ -237,6 +341,10 @@ private final class CameraUIKitViewController: UIViewController {
         previewContainerView.addSubview(sampleImageView)
         previewContainerView.addGestureRecognizer(UIPinchGestureRecognizer(target: self, action: #selector(handlePinchGesture(_:))))
 
+        topContainerView.backgroundColor = .white
+        bottomContainerView.backgroundColor = .white
+        zoomContainerView.backgroundColor = .clear
+
         view.addSubview(previewContainerView)
         view.addSubview(topContainerView)
         view.addSubview(zoomContainerView)
@@ -245,6 +353,141 @@ private final class CameraUIKitViewController: UIViewController {
         sampleImageView.snp.makeConstraints { make in
             make.edges.equalToSuperview()
         }
+
+        setupTopControls()
+        setupZoomControls()
+        setupBottomControls()
+        observeCoreDataChanges()
+    }
+
+    private func setupTopControls() {
+        timerControlView.onDelaySelected = { [weak self] delayTime in
+            self?.viewModel.delayTime = delayTime
+        }
+
+        cameraSwitchButton.setImage(UIImage(named: "cameraReverseIcon"), for: .normal)
+        cameraSwitchButton.imageView?.contentMode = .scaleAspectFit
+        cameraSwitchButton.addTarget(self, action: #selector(handleCameraSwitchTapped), for: .touchUpInside)
+
+#if DEBUG
+        debugButton.setImage(UIImage(systemName: "ladybug"), for: .normal)
+        debugButton.tintColor = .black
+        debugButton.addTarget(self, action: #selector(handleDebugTapped), for: .touchUpInside)
+#endif
+
+        topContainerView.addSubview(timerControlView)
+        topContainerView.addSubview(cameraSwitchButton)
+#if DEBUG
+        topContainerView.addSubview(debugButton)
+#endif
+
+        cameraSwitchButton.snp.makeConstraints { make in
+            make.centerY.equalToSuperview()
+            make.width.height.equalTo(30)
+#if DEBUG
+            make.trailing.equalTo(debugButton.snp.leading).offset(-16)
+#else
+            make.trailing.equalToSuperview().offset(-20)
+#endif
+        }
+
+#if DEBUG
+        debugButton.snp.makeConstraints { make in
+            make.centerY.equalToSuperview()
+            make.trailing.equalToSuperview().offset(-16)
+            make.width.height.equalTo(24)
+        }
+#endif
+
+        timerControlView.snp.makeConstraints { make in
+            make.centerY.equalToSuperview()
+            make.trailing.equalTo(cameraSwitchButton.snp.leading).offset(-5)
+            make.height.equalTo(30)
+        }
+    }
+
+    private func setupZoomControls() {
+        zoomBackgroundView.backgroundColor = UIColor.black.withAlphaComponent(0.2)
+        zoomBackgroundView.layer.cornerRadius = 19
+        zoomBackgroundView.clipsToBounds = true
+
+        zoomStackView.axis = .horizontal
+        zoomStackView.alignment = .center
+        zoomStackView.distribution = .fill
+        zoomStackView.spacing = 14
+
+        zoomContainerView.addSubview(zoomBackgroundView)
+        zoomBackgroundView.addSubview(zoomStackView)
+
+        zoomBackgroundView.snp.makeConstraints { make in
+            make.edges.equalToSuperview()
+            make.height.equalTo(40)
+        }
+
+        zoomStackView.snp.makeConstraints { make in
+            make.leading.trailing.equalToSuperview().inset(11)
+            make.centerY.equalToSuperview()
+            make.height.equalTo(30)
+        }
+    }
+
+    private func setupBottomControls() {
+        bottomOverlayView.backgroundColor = .white
+        filterHostView.backgroundColor = .clear
+
+        newFrameIconView.image = UIImage(named: "newFrameIcon")
+        newFrameIconView.contentMode = .scaleAspectFit
+
+        newFrameLabel.text = "새 프레임"
+        newFrameLabel.textColor = .black
+        newFrameLabel.font = .systemFont(ofSize: 12)
+        newFrameLabel.numberOfLines = 2
+        newFrameLabel.textAlignment = .center
+        newFrameLabel.adjustsFontSizeToFitWidth = true
+        newFrameLabel.minimumScaleFactor = 0.7
+
+        let newFrameStack = UIStackView(arrangedSubviews: [newFrameIconView, newFrameLabel])
+        newFrameStack.axis = .vertical
+        newFrameStack.alignment = .center
+        newFrameStack.spacing = 4
+
+        newFrameButton.addTarget(self, action: #selector(handleNewFrameTapped), for: .touchUpInside)
+        newFrameButton.addSubview(newFrameStack)
+
+        bottomContainerView.addSubview(bottomOverlayView)
+        bottomOverlayView.addSubview(filterHostView)
+        bottomOverlayView.addSubview(newFrameButton)
+
+        bottomOverlayView.snp.makeConstraints { make in
+            make.edges.equalToSuperview()
+        }
+
+        filterHostView.snp.makeConstraints { make in
+            bottomOverlayTopInsetConstraint = make.top.equalToSuperview().offset(20).constraint
+            make.leading.trailing.bottom.equalToSuperview()
+        }
+
+        newFrameButton.snp.makeConstraints { make in
+            make.leading.equalToSuperview().offset(20)
+            make.centerY.equalTo(filterHostView.snp.centerY)
+            newFrameButtonWidthConstraint = make.width.equalTo(70).constraint
+            newFrameButtonHeightConstraint = make.height.equalTo(80).constraint
+        }
+
+        newFrameStack.snp.makeConstraints { make in
+            make.center.equalToSuperview()
+        }
+
+        newFrameIconView.snp.makeConstraints { make in
+            newFrameIconWidthConstraint = make.width.equalTo(50).constraint
+            newFrameIconHeightConstraint = make.height.equalTo(50).constraint
+        }
+
+        let shadowColor = UIColor.white.cgColor
+        newFrameIconView.layer.shadowColor = shadowColor
+        newFrameIconView.layer.shadowOpacity = 1
+        newFrameIconView.layer.shadowRadius = 10
+        newFrameIconView.layer.shadowOffset = CGSize(width: 20, height: 0)
     }
 
     private func setupLayout() {
@@ -260,7 +503,7 @@ private final class CameraUIKitViewController: UIViewController {
 
         zoomContainerView.snp.makeConstraints { make in
             make.centerX.equalToSuperview()
-            make.bottom.equalTo(bottomContainerView.snp.top)
+            make.bottom.equalTo(bottomContainerView.snp.top).offset(-20)
         }
 
         previewContainerView.snp.makeConstraints { make in
@@ -269,24 +512,6 @@ private final class CameraUIKitViewController: UIViewController {
             previewWidthConstraint = make.width.equalTo(0).constraint
             previewHeightConstraint = make.height.equalTo(0).constraint
         }
-    }
-
-    private func setupHostingControllers() {
-        let top = UIHostingController(rootView: AnyView(makeTopView()))
-        let zoom = UIHostingController(rootView: AnyView(makeZoomView()))
-        let bottom = UIHostingController(rootView: AnyView(makeBottomView()))
-
-        top.view.backgroundColor = .clear
-        zoom.view.backgroundColor = .clear
-        bottom.view.backgroundColor = .clear
-
-        embed(top, in: topContainerView)
-        embed(zoom, in: zoomContainerView)
-        embed(bottom, in: bottomContainerView)
-
-        topHostingController = top
-        zoomHostingController = zoom
-        bottomHostingController = bottom
     }
 
     private func bindState() {
@@ -312,36 +537,50 @@ private final class CameraUIKitViewController: UIViewController {
             }
             .store(in: &cancellables)
 
+        viewModel.$delayTime
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] delayTime in
+                self?.timerControlView.update(delayTime: delayTime)
+            }
+            .store(in: &cancellables)
+
+        viewModel.$currentZoomFactor
+            .combineLatest(viewModel.$cameraPosition)
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] _, _ in
+                self?.rebuildZoomButtonsIfNeeded(force: false)
+                self?.updateZoomButtonsAppearance(animated: true)
+            }
+            .store(in: &cancellables)
+
         frameManager.$selectedFrame
             .receive(on: DispatchQueue.main)
-            .sink { [weak self] _ in
-                self?.updateFilterOverlay()
+            .sink { [weak self] selectedFrameID in
+                guard let self else { return }
+                self.updateFilterOverlay()
+                self.syncFilterSelection(selectedFrameID)
+                if selectedFrameID != nil, self.frameManager.resultImage == nil {
+                    self.loadSelectedFrameFromCoreDataIfNeeded()
+                }
+            }
+            .store(in: &cancellables)
+
+        motionManager.$currentOrientation
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] orientation in
+                self?.updateIconRotation(for: orientation)
             }
             .store(in: &cancellables)
     }
 
-    private func refreshHostingRootViews() {
-        topHostingController?.rootView = AnyView(makeTopView())
-        zoomHostingController?.rootView = AnyView(makeZoomView())
-        bottomHostingController?.rootView = AnyView(makeBottomView())
-    }
-
-    private func makeTopView() -> some View {
-        CameraTopView(viewModel: self.viewModel)
-            .environment(\.managedObjectContext, self.viewContext)
-    }
-
-    private func makeZoomView() -> some View {
-        CamZoomButtonView(viewModel: self.viewModel, motionManager: self.motionManager)
-            .environment(\.managedObjectContext, self.viewContext)
-    }
-
-    private func makeBottomView() -> some View {
-        CameraBottomView(viewModel: self.viewModel)
-            .environmentObject(self.naviManager)
-            .environmentObject(self.frameManager)
-            .environmentObject(self.imageModel)
-            .environment(\.managedObjectContext, self.viewContext)
+    private func observeCoreDataChanges() {
+        contextSaveObserver = NotificationCenter.default.addObserver(
+            forName: .NSManagedObjectContextDidSave,
+            object: nil,
+            queue: .main
+        ) { [weak self] _ in
+            self?.refreshFilterCollectionController(forceReload: false)
+        }
     }
 
     private func updateLayoutForCurrentBounds() {
@@ -350,6 +589,7 @@ private final class CameraUIKitViewController: UIViewController {
 
         let ratio = max(viewModel.frameRatio, 0.01)
         let isTallScreen = bounds.height / bounds.width > 2.0
+        isTallScreenLayout = isTallScreen
 
         let previewWidth: CGFloat
         let previewHeight: CGFloat
@@ -366,8 +606,19 @@ private final class CameraUIKitViewController: UIViewController {
         previewHeightConstraint?.update(offset: previewHeight)
         bottomHeightConstraint?.update(offset: isTallScreen ? 111 : 60)
 
+        bottomOverlayTopInsetConstraint?.update(offset: isTallScreen ? 20 : 0)
+
+        newFrameButtonWidthConstraint?.update(offset: isTallScreen ? 70 : 56)
+        newFrameButtonHeightConstraint?.update(offset: isTallScreen ? 80 : 56)
+        newFrameIconWidthConstraint?.update(offset: isTallScreen ? 50 : 40)
+        newFrameIconHeightConstraint?.update(offset: isTallScreen ? 50 : 40)
+        newFrameIconView.layer.shadowOpacity = isTallScreen ? 1 : 0
+        newFrameLabel.isHidden = !isTallScreen
+
         viewModel.frameSize.size = CGSize(width: previewWidth, height: previewHeight)
         viewModel.preview?.frame = previewContainerView.bounds
+
+        updateIconRotation(for: motionManager.currentOrientation)
     }
 
     private func updatePreviewContent() {
@@ -396,9 +647,9 @@ private final class CameraUIKitViewController: UIViewController {
 
     private func updateFilterOverlay() {
         guard let selectedFilterID = frameManager.selectedFrame else {
-            if let filterHostingController {
-                removeEmbedded(filterHostingController)
-                self.filterHostingController = nil
+            if let filterOverlayHostingController {
+                removeEmbedded(filterOverlayHostingController)
+                self.filterOverlayHostingController = nil
             }
             return
         }
@@ -409,8 +660,8 @@ private final class CameraUIKitViewController: UIViewController {
                 .allowsHitTesting(false)
         )
 
-        if let filterHostingController {
-            filterHostingController.rootView = overlayView
+        if let filterOverlayHostingController {
+            filterOverlayHostingController.rootView = overlayView
             return
         }
 
@@ -419,7 +670,272 @@ private final class CameraUIKitViewController: UIViewController {
         embed(controller, in: previewContainerView)
         previewContainerView.bringSubviewToFront(sampleImageView)
         previewContainerView.bringSubviewToFront(controller.view)
-        filterHostingController = controller
+        filterOverlayHostingController = controller
+    }
+
+    private func availableZoomOptions() -> [ZoomOption] {
+        let isUltraWide = viewModel.activeDeviceType == .builtInUltraWideCamera
+        let isBackCamera = viewModel.cameraPosition == .back
+
+        if isBackCamera {
+            return isUltraWide ? [.ultraWide, .wide, .telephoto, .maxZoom] : [.wide, .telephoto, .maxZoom]
+        } else {
+            return [.ultraWide, .wide, .telephoto]
+        }
+    }
+
+    private func isZoomSelected(option: ZoomOption, currentZoom: CGFloat) -> Bool {
+        let isUltraWide = viewModel.activeDeviceType == .builtInUltraWideCamera
+
+        if viewModel.cameraPosition == .back {
+            if isUltraWide {
+                switch option {
+                case .ultraWide: return currentZoom >= 1.0 && currentZoom < 1.9
+                case .wide: return currentZoom >= 1.9 && currentZoom < 2.9
+                case .telephoto: return currentZoom >= 2.9 && currentZoom < 3.9
+                case .maxZoom: return currentZoom >= 3.9
+                }
+            } else {
+                switch option {
+                case .wide: return currentZoom >= 1.0 && currentZoom < 1.9
+                case .telephoto: return currentZoom >= 1.9 && currentZoom < 2.9
+                case .maxZoom: return currentZoom >= 2.9
+                case .ultraWide: return false
+                }
+            }
+        } else {
+            return currentZoom == option.rawValue
+        }
+    }
+
+    private func rebuildZoomButtonsIfNeeded(force: Bool) {
+        let options = availableZoomOptions()
+        guard force || options != currentZoomOptions else { return }
+
+        currentZoomOptions = options
+        zoomButtons.removeAll()
+
+        zoomStackView.arrangedSubviews.forEach {
+            zoomStackView.removeArrangedSubview($0)
+            $0.removeFromSuperview()
+        }
+
+        options.forEach { option in
+            let button = UIButton(type: .system)
+            button.tag = option.tag
+            button.tintColor = .white
+            button.titleLabel?.textAlignment = .center
+            button.layer.masksToBounds = true
+            button.backgroundColor = UIColor.black.withAlphaComponent(0.5)
+            button.addTarget(self, action: #selector(handleZoomButtonTapped(_:)), for: .touchUpInside)
+
+            button.snp.makeConstraints { make in
+                make.width.height.equalTo(24)
+            }
+
+            zoomStackView.addArrangedSubview(button)
+            zoomButtons[option.tag] = button
+        }
+    }
+
+    private func updateZoomButtonsAppearance(animated: Bool) {
+        let updates = { [self] in
+            for option in currentZoomOptions {
+                guard let button = zoomButtons[option.tag] else { continue }
+
+                let selected = isZoomSelected(option: option, currentZoom: viewModel.currentZoomFactor)
+                let text = option.displayText(
+                    for: viewModel.cameraPosition,
+                    currentZoom: selected ? viewModel.currentZoomFactor : option.zoomFactor(for: viewModel.cameraPosition),
+                    isUltraWide: viewModel.activeDeviceType == .builtInUltraWideCamera
+                )
+
+                button.setTitle(selected ? "\(text)x" : text, for: .normal)
+                button.setTitleColor(selected ? .yellow : .white, for: .normal)
+                button.titleLabel?.font = .systemFont(ofSize: selected ? 13 : 12, weight: selected ? .semibold : .regular)
+
+                let targetSize: CGFloat = selected ? 30 : 24
+                button.layer.cornerRadius = targetSize / 2
+                button.snp.remakeConstraints { make in
+                    make.width.height.equalTo(targetSize)
+                }
+            }
+            zoomStackView.layoutIfNeeded()
+            zoomBackgroundView.layoutIfNeeded()
+        }
+
+        if animated {
+            UIView.animate(withDuration: 0.2, delay: 0, options: [.curveEaseOut, .allowUserInteraction]) {
+                updates()
+            }
+        } else {
+            updates()
+        }
+    }
+
+    private func setupFilterCollectionControllerIfNeeded() {
+        if frameManager.selectedFrame != nil, frameManager.resultImage == nil {
+            loadSelectedFrameFromCoreDataIfNeeded()
+        }
+
+        let filters = fetchFilterImages()
+        let controller = FilterCollectionViewController(
+            filterImages: filters,
+            selectedFilter: { [weak self] uuid in
+                self?.applySelectedFilter(uuid: uuid)
+            },
+            initialFilter: frameManager.selectedFrame,
+            viewModel: viewModel,
+            frameManager: frameManager
+        )
+
+        embed(controller, in: filterHostView)
+        controller.loadViewIfNeeded()
+        controller.currentSelectedFilter = frameManager.selectedFrame
+        controller.scrollToSelectedFilter(animated: false)
+
+        filterCollectionController = controller
+        filterCollectionSignature = makeFilterSignature(filters)
+    }
+
+    private func refreshFilterCollectionController(forceReload: Bool) {
+        guard let controller = filterCollectionController else {
+            setupFilterCollectionControllerIfNeeded()
+            return
+        }
+
+        let filters = fetchFilterImages()
+        let newSignature = makeFilterSignature(filters)
+
+        if forceReload || newSignature != filterCollectionSignature {
+            controller.filterImages = filters
+            controller.collectionView?.reloadData()
+            filterCollectionSignature = newSignature
+        }
+
+        syncFilterSelection(frameManager.selectedFrame)
+    }
+
+    private func syncFilterSelection(_ selectedFrameID: UUID?) {
+        guard let controller = filterCollectionController else { return }
+        if controller.currentSelectedFilter != selectedFrameID {
+            controller.currentSelectedFilter = selectedFrameID
+            controller.scrollToSelectedFilter(animated: false)
+        }
+    }
+
+    private func fetchFilterImages() -> [StoreImages] {
+        let request: NSFetchRequest<StoreImages> = StoreImages.fetchRequest()
+        request.sortDescriptors = [
+            NSSortDescriptor(key: "createdDate", ascending: true),
+            NSSortDescriptor(key: "uuid", ascending: true)
+        ]
+
+        do {
+            return try viewContext.fetch(request)
+                .filter { $0.uuid != nil }
+                .reversed()
+        } catch {
+            print("[CameraUIKit] 필터 목록 로딩 실패: \(error.localizedDescription)")
+            return []
+        }
+    }
+
+    private func makeFilterSignature(_ filters: [StoreImages]) -> [String] {
+        filters.map { image in
+            let uuid = image.uuid?.uuidString ?? "nil"
+            let createdAt = image.createdDate?.timeIntervalSince1970 ?? 0
+            return "\(uuid)-\(createdAt)"
+        }
+    }
+
+    private func applySelectedFilter(uuid: UUID?) {
+        guard let uuid else {
+            frameManager.selectedFrame = nil
+            frameManager.resultImage = nil
+            return
+        }
+
+        if let cached = FilterImageCache.shared.image(for: uuid) {
+            frameManager.selectedFrame = uuid
+            frameManager.resultImage = cached
+            return
+        }
+
+        let request: NSFetchRequest<StoreImages> = StoreImages.fetchRequest()
+        request.predicate = NSPredicate(format: "uuid == %@", uuid as CVarArg)
+        request.fetchLimit = 1
+
+        do {
+            let results = try viewContext.fetch(request)
+            if let storedImage = results.first,
+               let imageData = storedImage.image,
+               let image = FilterImageCache.shared.image(for: uuid, data: imageData) {
+                frameManager.selectedFrame = uuid
+                frameManager.resultImage = image
+            }
+        } catch {
+            print("[CameraUIKit] 선택 프레임 로딩 실패: \(error.localizedDescription)")
+        }
+    }
+
+    private func loadSelectedFrameFromCoreDataIfNeeded() {
+        guard let frameID = frameManager.selectedFrame else {
+            frameManager.resultImage = nil
+            return
+        }
+
+        if let cached = FilterImageCache.shared.image(for: frameID) {
+            frameManager.resultImage = cached
+            return
+        }
+
+        let request: NSFetchRequest<StoreImages> = StoreImages.fetchRequest()
+        request.predicate = NSPredicate(format: "uuid == %@", frameID as CVarArg)
+        request.fetchLimit = 1
+
+        do {
+            let results = try viewContext.fetch(request)
+            if let storedImage = results.first,
+               let data = storedImage.image,
+               let image = FilterImageCache.shared.image(for: frameID, data: data) {
+                frameManager.resultImage = image
+            } else {
+                frameManager.resultImage = nil
+            }
+        } catch {
+            print("[CameraUIKit] 초기 선택 프레임 로딩 실패: \(error.localizedDescription)")
+            frameManager.resultImage = nil
+        }
+    }
+
+    private func updateIconRotation(for orientation: UIDeviceOrientation) {
+        let angle = CGFloat(motionManager.rotationAngle(for: orientation).radians)
+        cameraSwitchButton.transform = CGAffineTransform(rotationAngle: angle)
+        timerControlView.updateIconRotation(angle: angle)
+
+        if isTallScreenLayout {
+            newFrameIconView.transform = .identity
+        } else {
+            newFrameIconView.transform = CGAffineTransform(rotationAngle: angle)
+        }
+    }
+
+    private func presentDebugOptions() {
+#if DEBUG
+        let debugOptionsView = CameraDebugOptionsView { [weak self] in
+            guard let self else { return }
+            self.viewModel.refreshRuntimeDependencies()
+            self.viewModel.checkVideoAuthorization()
+            self.viewModel.startCameraSession()
+            self.rebuildZoomButtonsIfNeeded(force: true)
+            self.updateZoomButtonsAppearance(animated: false)
+            self.updatePreviewContent()
+        }
+
+        let controller = UIHostingController(rootView: debugOptionsView)
+        present(controller, animated: true)
+#endif
     }
 
     private func embed(_ child: UIViewController, in container: UIView) {
@@ -446,6 +962,195 @@ private final class CameraUIKitViewController: UIViewController {
             viewModel.zoomInitialize()
         default:
             break
+        }
+    }
+
+    @objc
+    private func handleCameraSwitchTapped() {
+        viewModel.changeCamera()
+        rebuildZoomButtonsIfNeeded(force: true)
+        updateZoomButtonsAppearance(animated: true)
+    }
+
+    @objc
+    private func handleZoomButtonTapped(_ sender: UIButton) {
+        guard let option = currentZoomOptions.first(where: { $0.tag == sender.tag }) else { return }
+        viewModel.setZoom(factor: option.zoomFactor(for: viewModel.cameraPosition))
+        updateZoomButtonsAppearance(animated: true)
+    }
+
+    @objc
+    private func handleNewFrameTapped() {
+        Task { @MainActor in
+            naviManager.push(screen: Screen.photoPicker)
+        }
+    }
+
+    @objc
+    private func handleDebugTapped() {
+        presentDebugOptions()
+    }
+}
+
+private final class CameraTimerControlView: UIControl {
+    var onDelaySelected: ((TimeInterval) -> Void)?
+
+    private let backgroundCapsuleView = UIView()
+
+    private let collapsedStackView = UIStackView()
+    private let collapsedIconView = UIImageView()
+    private let collapsedTextLabel = UILabel()
+
+    private let expandedStackView = UIStackView()
+    private let expandedIconView = UIImageView()
+
+    private var widthConstraint: Constraint?
+
+    private var currentDelayTime: TimeInterval = 0
+    private var isExpanded = false
+
+    private var collapsedTapGesture: UITapGestureRecognizer?
+
+    override init(frame: CGRect) {
+        super.init(frame: frame)
+        setupView()
+    }
+
+    @available(*, unavailable)
+    required init?(coder: NSCoder) {
+        fatalError("init(coder:) has not been implemented")
+    }
+
+    func update(delayTime: TimeInterval) {
+        currentDelayTime = delayTime
+        collapsedTextLabel.text = delayTime == 0 ? "Off" : "\(Int(delayTime))초"
+    }
+
+    func updateIconRotation(angle: CGFloat) {
+        collapsedIconView.transform = CGAffineTransform(rotationAngle: angle)
+        expandedIconView.transform = CGAffineTransform(rotationAngle: angle)
+    }
+
+    private func setupView() {
+        backgroundCapsuleView.layer.cornerRadius = 15
+        backgroundCapsuleView.layer.borderWidth = 1
+        backgroundCapsuleView.clipsToBounds = true
+
+        addSubview(backgroundCapsuleView)
+        backgroundCapsuleView.snp.makeConstraints { make in
+            make.edges.equalToSuperview()
+            widthConstraint = make.width.equalTo(60).constraint
+            make.height.equalTo(30)
+        }
+
+        collapsedStackView.axis = .horizontal
+        collapsedStackView.alignment = .center
+        collapsedStackView.spacing = 8
+
+        collapsedIconView.image = UIImage(named: "timerBlack")
+        collapsedIconView.contentMode = .scaleAspectFit
+
+        collapsedTextLabel.font = .systemFont(ofSize: 13)
+        collapsedTextLabel.textColor = .black
+        collapsedTextLabel.minimumScaleFactor = 0.5
+        collapsedTextLabel.adjustsFontSizeToFitWidth = true
+
+        collapsedStackView.addArrangedSubview(collapsedIconView)
+        collapsedStackView.addArrangedSubview(collapsedTextLabel)
+
+        collapsedIconView.snp.makeConstraints { make in
+            make.width.height.equalTo(20)
+        }
+
+        expandedStackView.axis = .horizontal
+        expandedStackView.alignment = .center
+        expandedStackView.spacing = 16
+
+        expandedIconView.image = UIImage(named: "timerWhite")
+        expandedIconView.contentMode = .scaleAspectFit
+
+        expandedStackView.addArrangedSubview(expandedIconView)
+        expandedIconView.snp.makeConstraints { make in
+            make.width.height.equalTo(20)
+        }
+
+        [
+            ("Off", TimeInterval(0)),
+            ("3초", TimeInterval(3)),
+            ("5초", TimeInterval(5)),
+            ("7초", TimeInterval(7))
+        ].forEach { title, delay in
+            let button = UIButton(type: .system)
+            button.setTitle(title, for: .normal)
+            button.setTitleColor(.white, for: .normal)
+            button.titleLabel?.font = .systemFont(ofSize: 13, weight: .medium)
+            button.addAction(UIAction { [weak self] _ in
+                self?.selectDelay(delay)
+            }, for: .touchUpInside)
+            expandedStackView.addArrangedSubview(button)
+        }
+
+        backgroundCapsuleView.addSubview(collapsedStackView)
+        backgroundCapsuleView.addSubview(expandedStackView)
+
+        collapsedStackView.snp.makeConstraints { make in
+            make.edges.equalToSuperview().inset(UIEdgeInsets(top: 0, left: 5, bottom: 0, right: 5))
+        }
+
+        expandedStackView.snp.makeConstraints { make in
+            make.leading.trailing.equalToSuperview().inset(5)
+            make.centerY.equalToSuperview()
+        }
+
+        collapsedTapGesture = UITapGestureRecognizer(target: self, action: #selector(handleCollapsedTap))
+        if let collapsedTapGesture {
+            addGestureRecognizer(collapsedTapGesture)
+        }
+
+        expandedStackView.isHidden = true
+        applyStyle(animated: false)
+        update(delayTime: currentDelayTime)
+    }
+
+    @objc
+    private func handleCollapsedTap() {
+        guard !isExpanded else { return }
+        isExpanded = true
+        applyStyle(animated: true)
+    }
+
+    private func selectDelay(_ delay: TimeInterval) {
+        currentDelayTime = delay
+        onDelaySelected?(delay)
+        isExpanded = false
+        applyStyle(animated: true)
+    }
+
+    private func applyStyle(animated: Bool) {
+        let updates = { [self] in
+            widthConstraint?.update(offset: isExpanded ? 185 : 60)
+            backgroundCapsuleView.backgroundColor = isExpanded ? UIColor.black : UIColor.white
+            backgroundCapsuleView.layer.borderColor = isExpanded ? UIColor.clear.cgColor : (UIColor(named: "gray01") ?? UIColor.lightGray).cgColor
+
+            collapsedStackView.isHidden = isExpanded
+            expandedStackView.isHidden = !isExpanded
+
+            layoutIfNeeded()
+            superview?.layoutIfNeeded()
+        }
+
+        if animated {
+            UIView.animate(
+                withDuration: 0.2,
+                delay: 0,
+                usingSpringWithDamping: 0.8,
+                initialSpringVelocity: 0,
+                options: [.curveEaseOut, .allowUserInteraction]
+            ) {
+                updates()
+            }
+        } else {
+            updates()
         }
     }
 }
