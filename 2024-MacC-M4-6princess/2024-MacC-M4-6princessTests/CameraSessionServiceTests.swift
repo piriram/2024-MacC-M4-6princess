@@ -126,7 +126,7 @@ final class CameraSessionServiceTests: XCTestCase {
 
         let exp = expectation(description: "start log")
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
-            XCTAssertTrue(logs.contains("[CameraSession] started"))
+            XCTAssertTrue(logs.contains("[CameraStartup] start decision=start-running"))
             exp.fulfill()
         }
         wait(for: [exp], timeout: 1)

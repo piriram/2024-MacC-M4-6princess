@@ -369,8 +369,17 @@ class CameraViewModel: NSObject, ObservableObject {
     }
 
     func refreshRuntimeDependencies() {
-        cameraProvider.stopSession()
-        cameraProvider = CameraProviderFactory.makeDefault()
+        let nextProvider = CameraProviderFactory.makeDefault()
+        let isSameProvider = ObjectIdentifier(cameraProvider as AnyObject) == ObjectIdentifier(nextProvider as AnyObject)
+
+        if isSameProvider {
+            print("[CameraStartup] runtime decision=reuse-provider")
+        } else {
+            print("[CameraStartup] runtime decision=switch-provider")
+            cameraProvider.stopSession()
+            cameraProvider = nextProvider
+        }
+
         syncProviderState()
         setupPreviewLayer()
     }

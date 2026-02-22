@@ -147,6 +147,12 @@ final class SampleCameraProvider: CameraProviding {
 }
 
 enum CameraProviderFactory {
+    private static let stateQueue = DispatchQueue(label: "com.024-MacC-M4-6princess.CameraProviderFactory.state")
+    private static let sharedDeviceManager = CameraManager()
+    private static let sharedDeviceProvider = DeviceCameraProvider(cameraManager: sharedDeviceManager)
+    private static let sharedSampleProvider = SampleCameraProvider()
+    private static var didPrewarmDeviceRuntime = false
+
     static func makeDefault() -> CameraProviding {
         make(source: RuntimeTestingOptions.cameraSource())
     }
@@ -160,9 +166,29 @@ enum CameraProviderFactory {
 
         switch resolved {
         case .device:
-            return DeviceCameraProvider()
+            prewarmDeviceRuntimeIfNeeded()
+            print("[CameraStartup] provider decision=device reuse=shared")
+            return sharedDeviceProvider
         case .sample:
-            return SampleCameraProvider()
+            print("[CameraStartup] provider decision=sample reuse=shared")
+            return sharedSampleProvider
+        }
+    }
+
+    private static func prewarmDeviceRuntimeIfNeeded() {
+        let shouldPrewarm = stateQueue.sync { () -> Bool in
+            if didPrewarmDeviceRuntime {
+                return false
+            }
+            didPrewarmDeviceRuntime = true
+            return true
+        }
+
+        if shouldPrewarm {
+            print("[CameraStartup] prewarm decision=trigger")
+            sharedDeviceManager.prewarmSessionIfPossible()
+        } else {
+            print("[CameraStartup] prewarm decision=already-done")
         }
     }
 }

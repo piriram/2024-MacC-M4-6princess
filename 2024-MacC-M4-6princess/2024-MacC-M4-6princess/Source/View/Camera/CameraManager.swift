@@ -26,18 +26,25 @@ class CameraManager: NSObject, AVCapturePhotoCaptureDelegate {
     @Published var startFactor: CGFloat = 2.0
     @Published var deviceType: AVCaptureDevice.DeviceType
     private let sessionService: CameraSessionServicing
+    private let logger: (String) -> Void
     private var captureSubject: PassthroughSubject<AVCapturePhoto, Error>?
+    private let stateQueue = DispatchQueue(label: "com.024-MacC-M4-6princess.CameraManager.state")
+    private var isSessionConfigured = false
+    private var isConfiguringSession = false
+    private var shouldStartAfterConfiguration = false
 
     init(session: AVCaptureSession = AVCaptureSession(),
          videoDeviceInput: AVCaptureDeviceInput? = nil,
          output: AVCapturePhotoOutput = AVCapturePhotoOutput(),
-         sessionService: CameraSessionServicing = CameraSessionService()) {
+         sessionService: CameraSessionServicing = CameraSessionService(),
+         logger: @escaping (String) -> Void = { print($0) }) {
         self.session = session
         self.preset = .photo
         self.videoDeviceInput = videoDeviceInput
         self.output = output
         self.deviceType = .builtInWideAngleCamera
         self.sessionService = sessionService
+        self.logger = logger
         super.init()
     }
 
@@ -86,7 +93,7 @@ class CameraManager: NSObject, AVCapturePhotoCaptureDelegate {
                 guard let self else { return }
                 switch state {
                 case .authorized:
-                    self.setUp()
+                    self.setUp(startSessionAfterConfiguration: true, reason: "authorization")
                 case .notDetermined:
                     break
                 case .denied:
@@ -98,10 +105,40 @@ class CameraManager: NSObject, AVCapturePhotoCaptureDelegate {
     }
 
     //카메라를 처음에 세팅하는 함수
-    func setUp() {
-        do {
-            self.session.beginConfiguration()
-            
+    func setUp(startSessionAfterConfiguration: Bool = true, reason: String = "manual") {
+        let setupDecision = stateQueue.sync { () -> String in
+            if isSessionConfigured {
+                return "reuse-configured"
+            }
+            if isConfiguringSession {
+                return "in-progress"
+            }
+            isConfiguringSession = true
+            return "configure"
+        }
+
+        switch setupDecision {
+        case "reuse-configured":
+            logger("[CameraStartup] setup decision=reuse-configured reason=\(reason)")
+            if startSessionAfterConfiguration {
+                startSession()
+            }
+            return
+        case "in-progress":
+            if startSessionAfterConfiguration {
+                stateQueue.sync {
+                    self.shouldStartAfterConfiguration = true
+                }
+            }
+            logger("[CameraStartup] setup decision=already-configuring reason=\(reason)")
+            return
+        default:
+            logger("[CameraStartup] setup decision=configure reason=\(reason)")
+        }
+
+        sessionService.configureSession(session, reason: "manager.setup.\(reason)") { [weak self] in
+            guard let self else { return }
+
             let discoverySession = AVCaptureDevice.DiscoverySession(
                 deviceTypes: [
                     .builtInUltraWideCamera,
@@ -110,45 +147,81 @@ class CameraManager: NSObject, AVCapturePhotoCaptureDelegate {
                 mediaType: .video,
                 position: .back
             )
-            
-            guard let device = getBestCamera(from: discoverySession.devices) else {
-                session.commitConfiguration()
-                print("사용 가능한 카메라를 찾을 수 없습니다")
+
+            guard let device = self.getBestCamera(from: discoverySession.devices) else {
+                self.logger("[CameraStartup] setup failed=no-device reason=\(reason)")
+                self.finishConfiguration(success: false)
                 return
             }
-            
+
             self.deviceType = device.deviceType
             self.startFactor = 1.0
 
-            do {
-                let input = try AVCaptureDeviceInput(device: device)
-                if self.session.canAddInput(input) {
-                    self.session.addInput(input)
-                    self.videoDeviceInput = input
-                    
-                    do {
-                        try device.lockForConfiguration()
-                        if device.deviceType == .builtInUltraWideCamera {
-                            device.videoZoomFactor = 2.0
-                        } else {
-                            device.videoZoomFactor = 1.0
-                        }
-                        device.unlockForConfiguration()
-                    } catch {
-                        print("초기 줌 설정 오류: \(error)")
+            if self.session.inputs.isEmpty {
+                do {
+                    let input = try AVCaptureDeviceInput(device: device)
+                    if self.session.canAddInput(input) {
+                        self.session.addInput(input)
+                        self.videoDeviceInput = input
                     }
+                } catch {
+                    self.logger("[CameraStartup] setup failed=input-error=\(error.localizedDescription)")
+                    self.finishConfiguration(success: false)
+                    return
                 }
-                
-                if self.session.canAddOutput(self.output) {
-                    self.session.addOutput(self.output)
-                }
-                
-                self.session.commitConfiguration()
-                startSession()
-            } catch {
-                session.commitConfiguration()
-                print("카메라 입력 설정 오류: \(error)")
+            } else if let existingInput = self.session.inputs.first as? AVCaptureDeviceInput {
+                self.videoDeviceInput = existingInput
+                self.deviceType = existingInput.device.deviceType
             }
+
+            if !self.session.outputs.contains(where: { $0 === self.output }),
+               self.session.canAddOutput(self.output) {
+                self.session.addOutput(self.output)
+            }
+
+            do {
+                try device.lockForConfiguration()
+                device.videoZoomFactor = (device.deviceType == .builtInUltraWideCamera) ? 2.0 : 1.0
+                device.unlockForConfiguration()
+            } catch {
+                self.logger("초기 줌 설정 오류: \(error)")
+            }
+
+            self.finishConfiguration(success: true)
+
+            if startSessionAfterConfiguration || self.consumeQueuedStartRequest() {
+                self.startSession()
+            } else {
+                self.logger("[CameraStartup] setup decision=prewarmed-not-running")
+            }
+        }
+    }
+
+    func prewarmSessionIfPossible() {
+        let state = sessionService.currentVideoAuthorizationState()
+        guard state == .authorized else {
+            logger("[CameraStartup] prewarm decision=skipped authorization=\(state)")
+            return
+        }
+
+        logger("[CameraStartup] prewarm decision=configure")
+        setUp(startSessionAfterConfiguration: false, reason: "prewarm")
+    }
+
+    private func finishConfiguration(success: Bool) {
+        stateQueue.async {
+            self.isConfiguringSession = false
+            if success {
+                self.isSessionConfigured = true
+            }
+        }
+    }
+
+    private func consumeQueuedStartRequest() -> Bool {
+        stateQueue.sync {
+            let shouldStart = shouldStartAfterConfiguration
+            shouldStartAfterConfiguration = false
+            return shouldStart
         }
     }
 
@@ -179,61 +252,61 @@ class CameraManager: NSObject, AVCapturePhotoCaptureDelegate {
     //카메라 전후면 전환
     func changeCamera() {
         guard let currentInput = self.session.inputs.first as? AVCaptureDeviceInput else { return }
-        
-        session.beginConfiguration()
-        session.removeInput(currentInput)
-        
-        let newPosition: AVCaptureDevice.Position = currentInput.device.position == .front ? .back : .front
-        
-        // 후면 카메라로 전환할 때는 항상 UltraWide 카메라를 먼저 시도
-        let targetDeviceType: AVCaptureDevice.DeviceType = (newPosition == .back) ? .builtInUltraWideCamera : .builtInWideAngleCamera
-        
-        guard let newDevice = AVCaptureDevice.default(targetDeviceType, for: .video, position: newPosition),
-              let newInput = try? AVCaptureDeviceInput(device: newDevice) else {
-            // UltraWide 카메라가 없는 경우 WideAngle로 폴백
-            guard let fallbackDevice = AVCaptureDevice.default(.builtInWideAngleCamera, for: .video, position: newPosition),
-                  let fallbackInput = try? AVCaptureDeviceInput(device: fallbackDevice) else { return }
-            
-            if session.canAddInput(fallbackInput) {
-                session.addInput(fallbackInput)
-                self.videoDeviceInput = fallbackInput
-                self.deviceType = .builtInWideAngleCamera
-                
+
+        sessionService.configureSession(session, reason: "manager.changeCamera") { [weak self] in
+            guard let self else { return }
+
+            self.session.removeInput(currentInput)
+
+            let newPosition: AVCaptureDevice.Position = currentInput.device.position == .front ? .back : .front
+
+            // 후면 카메라로 전환할 때는 항상 UltraWide 카메라를 먼저 시도
+            let targetDeviceType: AVCaptureDevice.DeviceType = (newPosition == .back) ? .builtInUltraWideCamera : .builtInWideAngleCamera
+
+            guard let newDevice = AVCaptureDevice.default(targetDeviceType, for: .video, position: newPosition),
+                  let newInput = try? AVCaptureDeviceInput(device: newDevice) else {
+                // UltraWide 카메라가 없는 경우 WideAngle로 폴백
+                guard let fallbackDevice = AVCaptureDevice.default(.builtInWideAngleCamera, for: .video, position: newPosition),
+                      let fallbackInput = try? AVCaptureDeviceInput(device: fallbackDevice) else { return }
+
+                if self.session.canAddInput(fallbackInput) {
+                    self.session.addInput(fallbackInput)
+                    self.videoDeviceInput = fallbackInput
+                    self.deviceType = .builtInWideAngleCamera
+
+                    do {
+                        try fallbackDevice.lockForConfiguration()
+                        // WideAngle 카메라일 때는 1.0으로 설정
+                        fallbackDevice.videoZoomFactor = 1.0
+                        fallbackDevice.unlockForConfiguration()
+                    } catch {
+                        print("줌 설정 오류: \(error)")
+                    }
+                }
+                return
+            }
+
+            if self.session.canAddInput(newInput) {
+                self.session.addInput(newInput)
+                self.videoDeviceInput = newInput
+                self.deviceType = targetDeviceType
+
                 do {
-                    try fallbackDevice.lockForConfiguration()
-                    // WideAngle 카메라일 때는 1.0으로 설정
-                    fallbackDevice.videoZoomFactor = 1.0
-                    fallbackDevice.unlockForConfiguration()
+                    try newDevice.lockForConfiguration()
+                    if newPosition == .back {
+                        // UltraWide 카메라일 때는 2.0으로 설정
+                        let zoomFactor = (newDevice.deviceType == .builtInUltraWideCamera) ? 2.0 : 1.0
+                        newDevice.videoZoomFactor = zoomFactor
+                        newDevice.ramp(toVideoZoomFactor: zoomFactor, withRate: 1.0)
+                    } else {
+                        newDevice.videoZoomFactor = 1.0
+                    }
+                    newDevice.unlockForConfiguration()
                 } catch {
-                    print("줌 설정 오류: \(error)")
+                    print("카메라 전환 시 줌 설정 오류: \(error)")
                 }
             }
-            session.commitConfiguration()
-            return
         }
-        
-        if session.canAddInput(newInput) {
-            session.addInput(newInput)
-            self.videoDeviceInput = newInput
-            self.deviceType = targetDeviceType
-            
-            do {
-                try newDevice.lockForConfiguration()
-                if newPosition == .back {
-                    // UltraWide 카메라일 때는 2.0으로 설정
-                    let zoomFactor = (newDevice.deviceType == .builtInUltraWideCamera) ? 2.0 : 1.0
-                    newDevice.videoZoomFactor = zoomFactor
-                    newDevice.ramp(toVideoZoomFactor: zoomFactor, withRate: 1.0)
-                } else {
-                    newDevice.videoZoomFactor = 1.0
-                }
-                newDevice.unlockForConfiguration()
-            } catch {
-                print("카메라 전환 시 줌 설정 오류: \(error)")
-            }
-        }
-        
-        session.commitConfiguration()
     }
     
     //카메라 세션 시작
@@ -319,37 +392,39 @@ class CameraManager: NSObject, AVCapturePhotoCaptureDelegate {
     //줌 범위를 확인하고 부드럽게 해주는 줌 모션을 관리하는 함수
     func zoom(_ zoom: CGFloat) {
         guard let device = self.videoDeviceInput?.device else { return }
-        
-        do {
-            try device.lockForConfiguration()
-            
-            // 광학 줌 단계 확인 (듀얼/트리플 카메라)
-            let zoomFactors = device.virtualDeviceSwitchOverVideoZoomFactors as? [NSNumber] ?? []
-            print("Available zoom factors: \(zoomFactors)") // 사용 가능한 줌 단계 확인
-            
-            // 줌 범위 설정
-            let minZoom = device.minAvailableVideoZoomFactor
-            let maxZoom = min(device.maxAvailableVideoZoomFactor, 10.0) // 최대 10배로 제한
-            var finalZoom = min(max(zoom, minZoom), maxZoom)
-            
-            // 광학 줌 단계와 가까운 경우 해당 단계로 스냅
-            if !zoomFactors.isEmpty {
-                for factor in zoomFactors {
-                    let zoomFactor = CGFloat(truncating: factor)
-                    if abs(finalZoom - zoomFactor) < 0.3 {  // 0.3 이내면 광학 줌 단계로 스냅
-                        finalZoom = zoomFactor
-                        break
+
+        sessionService.configureSession(session, reason: "manager.zoom") {
+            do {
+                try device.lockForConfiguration()
+
+                // 광학 줌 단계 확인 (듀얼/트리플 카메라)
+                let zoomFactors = device.virtualDeviceSwitchOverVideoZoomFactors as? [NSNumber] ?? []
+                print("Available zoom factors: \(zoomFactors)") // 사용 가능한 줌 단계 확인
+
+                // 줌 범위 설정
+                let minZoom = device.minAvailableVideoZoomFactor
+                let maxZoom = min(device.maxAvailableVideoZoomFactor, 10.0) // 최대 10배로 제한
+                var finalZoom = min(max(zoom, minZoom), maxZoom)
+
+                // 광학 줌 단계와 가까운 경우 해당 단계로 스냅
+                if !zoomFactors.isEmpty {
+                    for factor in zoomFactors {
+                        let zoomFactor = CGFloat(truncating: factor)
+                        if abs(finalZoom - zoomFactor) < 0.3 {  // 0.3 이내면 광학 줌 단계로 스냅
+                            finalZoom = zoomFactor
+                            break
+                        }
                     }
                 }
+
+                // 부드러운 줌 적용
+                let rate: Double = finalZoom <= 2.0 ? 30.0 : 100.0  // 광학 줌 범위에서는 더 부드럽게
+                device.ramp(toVideoZoomFactor: finalZoom, withRate: Float(rate))
+
+                device.unlockForConfiguration()
+            } catch {
+                print("줌 설정 오류: \(error.localizedDescription)")
             }
-            
-            // 부드러운 줌 적용
-            let rate: Double = finalZoom <= 2.0 ? 30.0 : 100.0  // 광학 줌 범위에서는 더 부드럽게
-            device.ramp(toVideoZoomFactor: finalZoom, withRate: Float(rate))
-            
-            device.unlockForConfiguration()
-        } catch {
-            print("줌 설정 오류: \(error.localizedDescription)")
         }
     }
 }
