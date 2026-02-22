@@ -124,24 +124,22 @@ class PhotosPickerViewModel: ObservableObject {
         let requestOptions = PHImageRequestOptions()
         requestOptions.isNetworkAccessAllowed = true
         requestOptions.deliveryMode = .highQualityFormat
-        requestOptions.resizeMode = .exact
+        requestOptions.version = .current
         requestOptions.isSynchronous = false
 
         outputImage = nil
-        imageManager.requestImage(
-            for: asset,
-            targetSize: PHImageManagerMaximumSize,
-            contentMode: .aspectFill,
-            options: requestOptions
-        ) { [self] result, _ in
+        imageManager.requestImageDataAndOrientation(for: asset, options: requestOptions) { [weak self] data, _, _, _ in
+            guard let self else { return }
             guard image.identifier == asset.localIdentifier else { return }
+
             DispatchQueue.main.async {
-                if let image = result {
-                    self.outputImage = image
-                    completionHandler(image)
-                } else {
+                guard let data, let fullResolutionImage = UIImage(data: data) else {
                     completionHandler(nil)
+                    return
                 }
+
+                self.outputImage = fullResolutionImage
+                completionHandler(fullResolutionImage)
             }
         }
     }

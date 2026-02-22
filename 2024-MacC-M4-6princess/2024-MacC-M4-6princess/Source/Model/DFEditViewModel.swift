@@ -135,16 +135,14 @@ class DFEditViewModel: ObservableObject {
         return inputImage?.size.height ?? 0
     }
     
-    func showMaskImage(content: some View) {
-        
-        let render = ImageRenderer(content: content)
-        render.scale = 1
-        self.inputImage = render.uiImage
+    func showMaskImage(image: UIImage?) {
+        guard let image else { return }
+
+        self.inputImage = image
         self.removeBackground()
         if self.maskImageList.count == 0 && self.maskImage != nil {
             self.maskImageList.append(self.maskImage)
         }
-        
     }
     
     func drawLines(startLocation: CGPoint, location: CGPoint) {

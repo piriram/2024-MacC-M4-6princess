@@ -147,7 +147,7 @@ struct DFEditView: View {
         }
         .onAppear {
             viewModel.reloadCutoutEngineFromRuntimeSettings()
-            viewModel.showMaskImage(content: pickedImageRender)
+            viewModel.showMaskImage(image: frameManager.pickedImage)
             Analytics.logEvent("A4_누끼따기", parameters: nil)
         }
         .onDisappear{ // ✅
@@ -307,13 +307,6 @@ private extension DFEditView {
         .gesture(draw)
     }
     
-    var pickedImageRender: some View {
-        VStack {
-            if let image = frameManager.pickedImage {
-                Image(uiImage: image)
-            }
-        }
-    }
     var toolBarButtons: some View {
         
         HStack(spacing: 50) {
