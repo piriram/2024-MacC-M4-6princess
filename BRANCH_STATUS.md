@@ -6,8 +6,8 @@
 
 | Topic | Branch | Commit | Build | Status | Reason |
 |---|---|---:|---:|---|---|
-| Camera startup latency | `feat/camera-session-option2` | `ad3e327` | `202602230` | `SELECTED` | 내부 전환 지연 개선 + 릴리즈 리스크가 상대적으로 낮았다. |
-| Camera startup latency | `feat/camera-session-option3` | `3434f77` | `202602231` | `REJECTED` | QA에서 실패(사용자 보고: "옵션3은 터짐"). 구조 변경 범위가 커서 회귀 가능성이 높았다. |
+| Camera startup latency | `Feat/camera-session-option2` | `ad3e327` | `202602230` | `SELECTED` | 내부 전환 지연 개선 + 릴리즈 리스크가 상대적으로 낮았다. |
+| Camera startup latency | `Feat/camera-session-option3` | `3434f77` | `202602231` | `REJECTED` | QA에서 실패(사용자 보고: "옵션3은 터짐"). 구조 변경 범위가 커서 회귀 가능성이 높았다. |
 | FrameView UI split | `feat/frameview-ui-wip` | `93580e5` | `202602229` | `WIP` | UI 작업 전용 분리 브랜치로 유지 중이다. |
 
 ---
