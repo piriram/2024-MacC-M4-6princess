@@ -69,6 +69,7 @@ enum RuntimeTestingOptions {
     }
 
     static func cameraSource(userDefaults: UserDefaults = .standard) -> CameraSourceOption {
+        #if DEBUG
         if let raw = userDefaults.string(forKey: cameraSourceKey),
            let stored = CameraSourceOption(rawValue: raw) {
             return RuntimeSelectionResolver.resolvedCameraSource(
@@ -77,8 +78,13 @@ enum RuntimeTestingOptions {
                 isRealCameraAvailable: isRealCameraAvailable
             )
         }
+        #endif
 
-        return RuntimeSelectionResolver.defaultCameraSource(isSimulator: isSimulator)
+        return RuntimeSelectionResolver.resolvedCameraSource(
+            preferred: RuntimeSelectionResolver.defaultCameraSource(isSimulator: isSimulator),
+            isSimulator: isSimulator,
+            isRealCameraAvailable: isRealCameraAvailable
+        )
     }
 
     static func setCameraSource(_ value: CameraSourceOption, userDefaults: UserDefaults = .standard) {
@@ -86,10 +92,12 @@ enum RuntimeTestingOptions {
     }
 
     static func cutoutEngine(userDefaults: UserDefaults = .standard) -> CutoutEngineOption {
+        #if DEBUG
         if let raw = userDefaults.string(forKey: cutoutEngineKey),
            let stored = CutoutEngineOption(rawValue: raw) {
             return stored
         }
+        #endif
 
         return RuntimeSelectionResolver.defaultCutoutEngine(isSimulator: isSimulator)
     }
