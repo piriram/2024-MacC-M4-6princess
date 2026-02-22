@@ -335,39 +335,62 @@ private extension DFEditView {
                 guard !viewModel.clickedButton else { return } // 이미 클릭되었는지 확인
                 viewModel.clickedButton = true
                 viewModel.createResult { success in
-                    if success {
-                        viewModel.detectSubject(inputImage: viewModel.resultImage) { success in
-                            if success, let image = viewModel.outputImage {
-                                if let model = frameManager.changedSubject {
-                                    model.image = image
-                                    frameManager.changedSubject = nil
-                                } else {
-                                    imageModel.imageList.forEach {
-                                        $0.isTapped = false
-                                    }
-                                    let newImage = SubjectImage()
-                                    newImage.image = image
-                                    newImage.originalImage = frameManager.pickedImage
-                                    newImage.maskImage = viewModel.maskImage
-                                    imageModel.imageList.append(newImage)
-                                }
-                                naviManager.push(screen: Screen.modifyFrame)
-                                viewModel.isRenderFailed = false
-                                viewModel.removingLoadingOpacity = 0
-                            } else {
-                                print("Failed in detectSubject")
-                                viewModel.isRenderFailed = true
-                                viewModel.removingLoadingOpacity = 0
-                            }
-                            
-                            
-                            naviManager.push(screen: Screen.modifyFrame)
-                        }
-                    } else {
+                    guard success else {
                         print("Failed in createResult")
                         viewModel.isRenderFailed = true
+                        viewModel.removingLoadingOpacity = 0
+                        viewModel.clickedButton = false
+                        return
                     }
-                    viewModel.clickedButton = false
+
+                    if let image = viewModel.buildHighQualitySubjectImage() {
+                        if let model = frameManager.changedSubject {
+                            model.image = image
+                            frameManager.changedSubject = nil
+                        } else {
+                            imageModel.imageList.forEach {
+                                $0.isTapped = false
+                            }
+                            let newImage = SubjectImage()
+                            newImage.image = image
+                            newImage.originalImage = frameManager.pickedImage
+                            newImage.maskImage = viewModel.maskImage
+                            imageModel.imageList.append(newImage)
+                        }
+
+                        naviManager.push(screen: Screen.modifyFrame)
+                        viewModel.isRenderFailed = false
+                        viewModel.removingLoadingOpacity = 0
+                        viewModel.clickedButton = false
+                        return
+                    }
+
+                    // 드물게 트리밍이 실패한 경우 기존 Vision 경로로 폴백
+                    viewModel.detectSubject(inputImage: viewModel.resultImage) { success in
+                        if success, let image = viewModel.outputImage {
+                            if let model = frameManager.changedSubject {
+                                model.image = image
+                                frameManager.changedSubject = nil
+                            } else {
+                                imageModel.imageList.forEach {
+                                    $0.isTapped = false
+                                }
+                                let newImage = SubjectImage()
+                                newImage.image = image
+                                newImage.originalImage = frameManager.pickedImage
+                                newImage.maskImage = viewModel.maskImage
+                                imageModel.imageList.append(newImage)
+                            }
+                            naviManager.push(screen: Screen.modifyFrame)
+                            viewModel.isRenderFailed = false
+                        } else {
+                            print("Failed in detectSubject")
+                            viewModel.isRenderFailed = true
+                        }
+
+                        viewModel.removingLoadingOpacity = 0
+                        viewModel.clickedButton = false
+                    }
                 }
             } label: {
                 Text("확인")

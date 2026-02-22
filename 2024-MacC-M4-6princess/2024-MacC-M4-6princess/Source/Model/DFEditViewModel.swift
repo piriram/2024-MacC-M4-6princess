@@ -96,6 +96,10 @@ class DFEditViewModel: ObservableObject {
                       interaction.highlightedSubjects.insert(i)
                       try await generateImageForAllSelectedObjects()
                   }
+
+                  if let outputImage = self.outputImage {
+                      print("[CutoutQuality] detectSubject output size=\(Int(outputImage.size.width))x\(Int(outputImage.size.height))")
+                  }
                   
                   completionHandler(true) // 성공
               } catch {
@@ -261,6 +265,9 @@ class DFEditViewModel: ObservableObject {
 
             resultImage = renderedImage
             self.resultImage = resultImage
+            if let resultImage {
+                print("[CutoutQuality] createResult size=\(Int(resultImage.size.width))x\(Int(resultImage.size.height))")
+            }
             completionHandler(true)
         }
     }
@@ -322,6 +329,18 @@ class DFEditViewModel: ObservableObject {
         }
         return UIImage(cgImage: cgImage)
     }
+
+    func buildHighQualitySubjectImage() -> UIImage? {
+        guard let resultImage else { return nil }
+
+        if let trimmedImage = resultImage.trimmedTransparentBounds() {
+            print("[CutoutQuality] buildHighQualitySubjectImage source=\(Int(resultImage.size.width))x\(Int(resultImage.size.height)) trimmed=\(Int(trimmedImage.size.width))x\(Int(trimmedImage.size.height))")
+            return trimmedImage
+        }
+
+        print("[CutoutQuality] buildHighQualitySubjectImage fallback to full result image size=\(Int(resultImage.size.width))x\(Int(resultImage.size.height))")
+        return resultImage
+    }
     
     func appendMaskImage(_ inputImage: UIImage?) {
         if let image = inputImage {
@@ -340,4 +359,99 @@ class DFEditViewModel: ObservableObject {
         maskColor = .pink
     }
     
+}
+
+private extension UIImage {
+    func trimmedTransparentBounds(alphaThreshold: UInt8 = 1) -> UIImage? {
+        guard let normalizedImage = normalizedForProcessing(),
+              let cgImage = normalizedImage.cgImage else {
+            return nil
+        }
+
+        let alphaInfo = cgImage.alphaInfo
+        let hasAlpha: Bool = {
+            switch alphaInfo {
+            case .first, .last, .premultipliedFirst, .premultipliedLast, .alphaOnly:
+                return true
+            default:
+                return false
+            }
+        }()
+
+        guard hasAlpha else {
+            return normalizedImage
+        }
+
+        guard let dataProvider = cgImage.dataProvider,
+              let data = dataProvider.data,
+              let pointer = CFDataGetBytePtr(data) else {
+            return nil
+        }
+
+        let width = cgImage.width
+        let height = cgImage.height
+        let bytesPerRow = cgImage.bytesPerRow
+        let bytesPerPixel = max(1, cgImage.bitsPerPixel / 8)
+
+        guard width > 0, height > 0 else { return nil }
+
+        var minX = width
+        var minY = height
+        var maxX = 0
+        var maxY = 0
+        var found = false
+
+        for y in 0..<height {
+            let row = pointer.advanced(by: y * bytesPerRow)
+            for x in 0..<width {
+                let pixel = row.advanced(by: x * bytesPerPixel)
+                let alpha: UInt8
+
+                switch alphaInfo {
+                case .premultipliedFirst, .first, .noneSkipFirst:
+                    alpha = pixel[0]
+                case .premultipliedLast, .last, .noneSkipLast:
+                    alpha = pixel[min(3, bytesPerPixel - 1)]
+                case .alphaOnly:
+                    alpha = pixel[0]
+                default:
+                    alpha = 255
+                }
+
+                if alpha > alphaThreshold {
+                    found = true
+                    minX = min(minX, x)
+                    minY = min(minY, y)
+                    maxX = max(maxX, x)
+                    maxY = max(maxY, y)
+                }
+            }
+        }
+
+        guard found else { return nil }
+
+        let cropRect = CGRect(
+            x: minX,
+            y: minY,
+            width: maxX - minX + 1,
+            height: maxY - minY + 1
+        )
+
+        guard let cropped = cgImage.cropping(to: cropRect) else {
+            return nil
+        }
+
+        return UIImage(cgImage: cropped, scale: normalizedImage.scale, orientation: .up)
+    }
+
+    private func normalizedForProcessing() -> UIImage? {
+        if imageOrientation == .up {
+            return self
+        }
+
+        UIGraphicsBeginImageContextWithOptions(size, false, scale)
+        defer { UIGraphicsEndImageContext() }
+        draw(in: CGRect(origin: .zero, size: size))
+        return UIGraphicsGetImageFromCurrentImageContext()
+    }
 }
