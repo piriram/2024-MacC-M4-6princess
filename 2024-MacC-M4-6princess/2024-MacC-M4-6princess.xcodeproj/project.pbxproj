@@ -16,6 +16,7 @@
 		89938ADD2D7EC5F800EAD63B /* GoogleMobileAds in Frameworks */ = {isa = PBXBuildFile; productRef = 89938ADC2D7EC5F800EAD63B /* GoogleMobileAds */; };
 		89DC209F2D324E0D00C1BD4E /* FirebaseAppCheck in Frameworks */ = {isa = PBXBuildFile; productRef = 89DC209E2D324E0D00C1BD4E /* FirebaseAppCheck */; };
 		89DC20A12D324E2D00C1BD4E /* FirebaseStorage in Frameworks */ = {isa = PBXBuildFile; productRef = 89DC20A02D324E2D00C1BD4E /* FirebaseStorage */; };
+		E50F7F497ADB5D36912A79C2 /* Pods_2024_MacC_M4_6princess.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 853BFE19E4232F2577F88DC9 /* Pods_2024_MacC_M4_6princess.framework */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -43,14 +44,19 @@
 		4EA88E872DE49C28009C920D /* en */ = {isa = PBXFileReference; lastKnownFileType = text.plist.strings; name = en; path = en.lproj/InfoPlist.strings; sourceTree = "<group>"; };
 		4EA88E882DE49C29009C920D /* ja */ = {isa = PBXFileReference; lastKnownFileType = text.plist.strings; name = ja; path = ja.lproj/InfoPlist.strings; sourceTree = "<group>"; };
 		4EB66FB62D8DE9650042B399 /* Localizable.xcstrings */ = {isa = PBXFileReference; lastKnownFileType = text.json.xcstrings; path = Localizable.xcstrings; sourceTree = "<group>"; };
+		8205675D2D229B65A7B194EF /* Pods-2024-MacC-M4-6princess.release.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-2024-MacC-M4-6princess.release.xcconfig"; path = "Target Support Files/Pods-2024-MacC-M4-6princess/Pods-2024-MacC-M4-6princess.release.xcconfig"; sourceTree = "<group>"; };
+		853BFE19E4232F2577F88DC9 /* Pods_2024_MacC_M4_6princess.framework */ = {isa = PBXFileReference; explicitFileType = wrapper.framework; includeInIndex = 0; path = Pods_2024_MacC_M4_6princess.framework; sourceTree = BUILT_PRODUCTS_DIR; };
 		89A94AAF2CA9B64C00824592 /* 2024-MacC-M4-6princess.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = "2024-MacC-M4-6princess.app"; sourceTree = BUILT_PRODUCTS_DIR; };
 		89A94ABF2CA9B66300824592 /* 2024-MacC-M4-6princessTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = "2024-MacC-M4-6princessTests.xctest"; sourceTree = BUILT_PRODUCTS_DIR; };
 		89A94AC92CA9B66300824592 /* 2024-MacC-M4-6princessUITests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = "2024-MacC-M4-6princessUITests.xctest"; sourceTree = BUILT_PRODUCTS_DIR; };
+		D92C3138807A48981E8016E4 /* Pods-2024-MacC-M4-6princess.debug.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-2024-MacC-M4-6princess.debug.xcconfig"; path = "Target Support Files/Pods-2024-MacC-M4-6princess/Pods-2024-MacC-M4-6princess.debug.xcconfig"; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedRootGroup section */
 		89A94AB12CA9B64C00824592 /* 2024-MacC-M4-6princess */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
+			exceptions = (
+			);
 			path = "2024-MacC-M4-6princess";
 			sourceTree = "<group>";
 		};
@@ -68,6 +74,7 @@
 				898B159C2CFD8CCD00EA200A /* FirebaseAnalyticsOnDeviceConversion in Frameworks */,
 				89DC20A12D324E2D00C1BD4E /* FirebaseStorage in Frameworks */,
 				898B14FA2CFD5F5800EA200A /* FirebaseAnalyticsWithoutAdIdSupport in Frameworks */,
+				E50F7F497ADB5D36912A79C2 /* Pods_2024_MacC_M4_6princess.framework in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -88,9 +95,20 @@
 /* End PBXFrameworksBuildPhase section */
 
 /* Begin PBXGroup section */
+		4A74103C4563522CD6273311 /* Pods */ = {
+			isa = PBXGroup;
+			children = (
+				D92C3138807A48981E8016E4 /* Pods-2024-MacC-M4-6princess.debug.xcconfig */,
+				8205675D2D229B65A7B194EF /* Pods-2024-MacC-M4-6princess.release.xcconfig */,
+			);
+			name = Pods;
+			path = Pods;
+			sourceTree = "<group>";
+		};
 		898B159A2CFD8CCD00EA200A /* Frameworks */ = {
 			isa = PBXGroup;
 			children = (
+				853BFE19E4232F2577F88DC9 /* Pods_2024_MacC_M4_6princess.framework */,
 			);
 			name = Frameworks;
 			sourceTree = "<group>";
@@ -103,6 +121,7 @@
 				89A94AB12CA9B64C00824592 /* 2024-MacC-M4-6princess */,
 				898B159A2CFD8CCD00EA200A /* Frameworks */,
 				89A94AB02CA9B64C00824592 /* Products */,
+				4A74103C4563522CD6273311 /* Pods */,
 			);
 			sourceTree = "<group>";
 		};
@@ -123,9 +142,12 @@
 			isa = PBXNativeTarget;
 			buildConfigurationList = 89A94AD32CA9B66300824592 /* Build configuration list for PBXNativeTarget "2024-MacC-M4-6princess" */;
 			buildPhases = (
+				A4EB0CFE6A0BF9A9594966CF /* [CP] Check Pods Manifest.lock */,
 				89A94AAB2CA9B64C00824592 /* Sources */,
 				89A94AAC2CA9B64C00824592 /* Frameworks */,
 				89A94AAD2CA9B64C00824592 /* Resources */,
+				31E4A3B7ECCC874ED3C13C52 /* [CP] Embed Pods Frameworks */,
+				AE773046B7C67189B312B437 /* [CP] Copy Pods Resources */,
 			);
 			buildRules = (
 			);
@@ -162,8 +184,6 @@
 				89A94AC12CA9B66300824592 /* PBXTargetDependency */,
 			);
 			name = "2024-MacC-M4-6princessTests";
-			packageProductDependencies = (
-			);
 			productName = "2024-MacC-M4-6princessTests";
 			productReference = 89A94ABF2CA9B66300824592 /* 2024-MacC-M4-6princessTests.xctest */;
 			productType = "com.apple.product-type.bundle.unit-test";
@@ -182,8 +202,6 @@
 				89A94ACB2CA9B66300824592 /* PBXTargetDependency */,
 			);
 			name = "2024-MacC-M4-6princessUITests";
-			packageProductDependencies = (
-			);
 			productName = "2024-MacC-M4-6princessUITests";
 			productReference = 89A94AC92CA9B66300824592 /* 2024-MacC-M4-6princessUITests.xctest */;
 			productType = "com.apple.product-type.bundle.ui-testing";
@@ -267,6 +285,65 @@
 			runOnlyForDeploymentPostprocessing = 0;
 		};
 /* End PBXResourcesBuildPhase section */
+
+/* Begin PBXShellScriptBuildPhase section */
+		31E4A3B7ECCC874ED3C13C52 /* [CP] Embed Pods Frameworks */ = {
+			isa = PBXShellScriptBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			inputFileListPaths = (
+				"${PODS_ROOT}/Target Support Files/Pods-2024-MacC-M4-6princess/Pods-2024-MacC-M4-6princess-frameworks-${CONFIGURATION}-input-files.xcfilelist",
+			);
+			name = "[CP] Embed Pods Frameworks";
+			outputFileListPaths = (
+				"${PODS_ROOT}/Target Support Files/Pods-2024-MacC-M4-6princess/Pods-2024-MacC-M4-6princess-frameworks-${CONFIGURATION}-output-files.xcfilelist",
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+			shellPath = /bin/sh;
+			shellScript = "\"${PODS_ROOT}/Target Support Files/Pods-2024-MacC-M4-6princess/Pods-2024-MacC-M4-6princess-frameworks.sh\"\n";
+			showEnvVarsInLog = 0;
+		};
+		A4EB0CFE6A0BF9A9594966CF /* [CP] Check Pods Manifest.lock */ = {
+			isa = PBXShellScriptBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			inputFileListPaths = (
+			);
+			inputPaths = (
+				"${PODS_PODFILE_DIR_PATH}/Podfile.lock",
+				"${PODS_ROOT}/Manifest.lock",
+			);
+			name = "[CP] Check Pods Manifest.lock";
+			outputFileListPaths = (
+			);
+			outputPaths = (
+				"$(DERIVED_FILE_DIR)/Pods-2024-MacC-M4-6princess-checkManifestLockResult.txt",
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+			shellPath = /bin/sh;
+			shellScript = "diff \"${PODS_PODFILE_DIR_PATH}/Podfile.lock\" \"${PODS_ROOT}/Manifest.lock\" > /dev/null\nif [ $? != 0 ] ; then\n    # print error to STDERR\n    echo \"error: The sandbox is not in sync with the Podfile.lock. Run 'pod install' or update your CocoaPods installation.\" >&2\n    exit 1\nfi\n# This output is used by Xcode 'outputs' to avoid re-running this script phase.\necho \"SUCCESS\" > \"${SCRIPT_OUTPUT_FILE_0}\"\n";
+			showEnvVarsInLog = 0;
+		};
+		AE773046B7C67189B312B437 /* [CP] Copy Pods Resources */ = {
+			isa = PBXShellScriptBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			inputFileListPaths = (
+				"${PODS_ROOT}/Target Support Files/Pods-2024-MacC-M4-6princess/Pods-2024-MacC-M4-6princess-resources-${CONFIGURATION}-input-files.xcfilelist",
+			);
+			name = "[CP] Copy Pods Resources";
+			outputFileListPaths = (
+				"${PODS_ROOT}/Target Support Files/Pods-2024-MacC-M4-6princess/Pods-2024-MacC-M4-6princess-resources-${CONFIGURATION}-output-files.xcfilelist",
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+			shellPath = /bin/sh;
+			shellScript = "\"${PODS_ROOT}/Target Support Files/Pods-2024-MacC-M4-6princess/Pods-2024-MacC-M4-6princess-resources.sh\"\n";
+			showEnvVarsInLog = 0;
+		};
+/* End PBXShellScriptBuildPhase section */
 
 /* Begin PBXSourcesBuildPhase section */
 		89A94AAB2CA9B64C00824592 /* Sources */ = {
@@ -445,6 +522,7 @@
 		};
 		89A94AD42CA9B66300824592 /* Debug */ = {
 			isa = XCBuildConfiguration;
+			baseConfigurationReference = D92C3138807A48981E8016E4 /* Pods-2024-MacC-M4-6princess.debug.xcconfig */;
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
@@ -488,6 +566,7 @@
 		};
 		89A94AD52CA9B66300824592 /* Release */ = {
 			isa = XCBuildConfiguration;
+			baseConfigurationReference = 8205675D2D229B65A7B194EF /* Pods-2024-MacC-M4-6princess.release.xcconfig */;
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
