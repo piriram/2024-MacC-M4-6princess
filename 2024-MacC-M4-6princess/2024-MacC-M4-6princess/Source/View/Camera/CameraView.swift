@@ -56,11 +56,11 @@ struct CameraView: View {
         Binding(
             get: {
                 viewModel.captureState == .readyToNavigate &&
-                viewModel.routeToResult &&
-                !viewModel.isResultNavigationInProgress
+                viewModel.routeToResult
             },
             set: { isPresented in
                 if !isPresented {
+                    print("[CameraNavigation] destination dismissed")
                     viewModel.finishResultNavigation()
                 }
             }
@@ -149,11 +149,13 @@ struct CameraView: View {
                let frameImg = viewModel.capturedFrameImage ?? frameManager.resultImage {
                 IOView(bg: takenImg, idol: frameImg, motionManager: motionManager)
                     .onAppear {
+                        print("[CameraNavigation] push IOView success")
                         viewModel.beginResultNavigation()
                     }
             } else {
                 EmptyView()
                     .onAppear {
+                        print("[CameraNavigation] fallback branch entered. takenImgExists=\(viewModel.takenImg != nil), capturedFrameExists=\(viewModel.capturedFrameImage != nil), frameManagerExists=\(frameManager.resultImage != nil)")
                         viewModel.beginResultNavigation()
                         viewModel.errorMessage = "프레임이 없습니다. 다시 촬영해주세요."
                         viewModel.showErrorAlert = true
