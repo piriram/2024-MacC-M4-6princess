@@ -39,7 +39,7 @@ extension CameraTopView{
         .background(.white)
         .sheet(isPresented: $showDebugOptions) {
             CameraDebugOptionsView {
-                viewModel.refreshRuntimeDependencies()
+                viewModel.refreshRuntimeDependencies(reason: "debug options changed")
                 viewModel.checkVideoAuthorization()
             }
         }
@@ -107,15 +107,7 @@ extension FilteredImageView{
         }
         .frame(height: 124)
         .onAppear {
-            DispatchQueue.global(qos: .userInitiated).async {
-                viewModel.startCameraSession()
-                DispatchQueue.main.async {
-                    reloadFilterImages()
-                }
-            }
-        }
-        .onDisappear {
-            viewModel.stopCameraSession()
+            reloadFilterImages()
         }
         .onChange(of: filterImages.count) { _ in
             reloadFilterImages()

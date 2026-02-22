@@ -98,6 +98,12 @@ class CameraViewModel: NSObject, ObservableObject {
     private var cameraProvider: CameraProviding
     let motionManager = MotionManager()
     private var cancellables: Set<AnyCancellable> = []
+    private var hasInitializedRuntimeDependencies = false
+    private var hasRequestedAuthorization = false
+    private var activeCameraSource: CameraSourceOption?
+    private var isCameraScreenVisible = false
+    private var pendingStopWorkItem: DispatchWorkItem?
+    private let warmSessionRetentionSeconds: TimeInterval = 1.0
 
     init(cameraProvider: CameraProviding = CameraProviderFactory.makeDefault()) {
         self.cameraProvider = cameraProvider
@@ -116,6 +122,10 @@ class CameraViewModel: NSObject, ObservableObject {
     private func setupPreviewLayer() {
         preview = AVCaptureVideoPreviewLayer(session: cameraProvider.session)
         preview.videoGravity = .resizeAspectFill
+    }
+
+    private func logCameraStartup(_ message: String) {
+        print("[CameraStartup] \(message)")
     }
 
     func handleCapturedPhoto(_ frame: CameraCaptureFrame) {
@@ -368,11 +378,111 @@ class CameraViewModel: NSObject, ObservableObject {
         errorMessage = ""
     }
 
-    func refreshRuntimeDependencies() {
-        cameraProvider.stopSession()
-        cameraProvider = CameraProviderFactory.makeDefault()
+    func ensureRuntimeDependenciesInitialized(forceRefresh: Bool = false) {
+        let desiredSource = RuntimeTestingOptions.cameraSource()
+        let shouldRefresh = forceRefresh || !hasInitializedRuntimeDependencies || activeCameraSource != desiredSource
+
+        guard shouldRefresh else {
+            logCameraStartup("reuse provider source=\(String(describing: activeCameraSource))")
+            return
+        }
+
+        cancelPendingStop(reason: "runtime refresh")
+        if hasInitializedRuntimeDependencies {
+            cameraProvider.stopSession()
+            logCameraStartup("stopped old provider before refresh")
+        }
+
+        cameraProvider = CameraProviderFactory.make(source: desiredSource)
+        hasInitializedRuntimeDependencies = true
+        hasRequestedAuthorization = false
+        activeCameraSource = desiredSource
         syncProviderState()
         setupPreviewLayer()
+        logCameraStartup("initialized provider source=\(desiredSource)")
+    }
+
+    func refreshRuntimeDependencies(reason: String = "manual") {
+        logCameraStartup("refresh requested reason=\(reason)")
+        ensureRuntimeDependenciesInitialized(forceRefresh: true)
+    }
+
+    func handleCameraViewAppear() {
+        isCameraScreenVisible = true
+        cancelPendingStop(reason: "camera view appear")
+        ensureRuntimeDependenciesInitialized()
+        activateCameraSession(reason: "camera view appear")
+    }
+
+    func handleCameraViewDisappear() {
+        isCameraScreenVisible = false
+        scheduleWarmStop(reason: "camera view disappear")
+    }
+
+    func handleScenePhaseChange(_ phase: ScenePhase) {
+        switch phase {
+        case .active:
+            logCameraStartup("scene became active visible=\(isCameraScreenVisible)")
+            if isCameraScreenVisible {
+                activateCameraSession(reason: "scene active")
+            }
+        case .inactive:
+            logCameraStartup("scene became inactive")
+        case .background:
+            forceStopCameraSession(reason: "scene background")
+        @unknown default:
+            forceStopCameraSession(reason: "scene unknown")
+        }
+    }
+
+    func forceStopCameraSession(reason: String) {
+        cancelPendingStop(reason: "force stop")
+        cameraProvider.stopSession()
+        logCameraStartup("session stopped immediately reason=\(reason)")
+    }
+
+    private func activateCameraSession(reason: String) {
+        cancelPendingStop(reason: "activate session")
+
+        guard hasInitializedRuntimeDependencies else {
+            logCameraStartup("activate skipped because runtime dependencies are not initialized")
+            return
+        }
+
+        if !hasRequestedAuthorization {
+            hasRequestedAuthorization = true
+            logCameraStartup("requesting video authorization reason=\(reason)")
+            cameraProvider.checkVideoAuthorizaion()
+
+            if cameraProvider.isSampleProvider {
+                cameraProvider.startSession()
+                logCameraStartup("sample session started reason=\(reason)")
+            }
+            return
+        }
+
+        cameraProvider.startSession()
+        logCameraStartup("session start requested reason=\(reason)")
+    }
+
+    private func scheduleWarmStop(reason: String) {
+        cancelPendingStop(reason: "reschedule warm stop")
+        let workItem = DispatchWorkItem { [weak self] in
+            guard let self else { return }
+            self.cameraProvider.stopSession()
+            self.logCameraStartup("warm stop executed reason=\(reason)")
+            self.pendingStopWorkItem = nil
+        }
+        pendingStopWorkItem = workItem
+        DispatchQueue.main.asyncAfter(deadline: .now() + warmSessionRetentionSeconds, execute: workItem)
+        logCameraStartup("warm stop scheduled after \(warmSessionRetentionSeconds)s reason=\(reason)")
+    }
+
+    private func cancelPendingStop(reason: String) {
+        guard let pendingStopWorkItem else { return }
+        pendingStopWorkItem.cancel()
+        self.pendingStopWorkItem = nil
+        logCameraStartup("warm stop cancelled reason=\(reason)")
     }
 
     private func syncProviderState() {
@@ -395,15 +505,18 @@ class CameraViewModel: NSObject, ObservableObject {
     }
 
     func checkVideoAuthorization() {
+        hasRequestedAuthorization = true
         cameraProvider.checkVideoAuthorizaion()
     }
 
     func startCameraSession() {
+        cancelPendingStop(reason: "explicit start")
         cameraProvider.startSession()
+        logCameraStartup("explicit session start")
     }
 
     func stopCameraSession() {
-        cameraProvider.stopSession()
+        scheduleWarmStop(reason: "explicit stop")
     }
 
     //카메라 전후면 전환(초기 줌 팩터를 다시 맞춰줌)

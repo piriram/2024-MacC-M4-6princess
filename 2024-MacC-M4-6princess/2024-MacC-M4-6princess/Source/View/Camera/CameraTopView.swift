@@ -45,7 +45,7 @@ struct CameraTopView: View {
             .background(.white)
             .sheet(isPresented: $showDebugOptions) {
                 CameraDebugOptionsView {
-                    viewModel.refreshRuntimeDependencies()
+                    viewModel.refreshRuntimeDependencies(reason: "debug options changed")
                     viewModel.checkVideoAuthorization()
                 }
             }
