@@ -120,4 +120,107 @@ final class CameraViewModelTests: XCTestCase {
         XCTAssertFalse(sut.routeToResult)
         XCTAssertFalse(sut.isResultNavigationInProgress)
     }
+
+    func testDoubleTapShutterShouldTriggerSingleCapture() {
+        let subject = PassthroughSubject<AVCapturePhoto, Error>()
+        let manager = StubCameraManager(publisher: subject.eraseToAnyPublisher())
+        manager.session.startRunning()
+
+        let sut = CameraViewModel(cameraManager: manager)
+        let begin1 = sut.beginCapture()
+        XCTAssertTrue(begin1)
+
+        // 첫 번째 탭
+        sut.takePic()
+        // 거의 동시에 다시 탭하는 상황을 흉내
+        sut.takePic()
+
+        let exp = expectation(description: "takePictureCalledOnceForDoubleTap")
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.8) {
+            XCTAssertEqual(manager.takePictureCalledCount, 1)
+            exp.fulfill()
+        }
+        wait(for: [exp], timeout: 2.0)
+
+        subject.send(completion: .failure(StubCaptureError.failed))
+    }
+
+    func testTimerCaptureSingleShotWhileQueued() {
+        let subject = PassthroughSubject<AVCapturePhoto, Error>()
+        let manager = StubCameraManager(publisher: subject.eraseToAnyPublisher())
+        manager.session.startRunning()
+
+        let sut = CameraViewModel(cameraManager: manager)
+        XCTAssertTrue(sut.beginCapture())
+
+        // 타이머 중복 호출이 발생해도 실제 촬영은 1회만 요청되어야 함
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) {
+            sut.takePic()
+        }
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.07) {
+            sut.takePic()
+        }
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.08) {
+            sut.takePic()
+        }
+
+        let exp = expectation(description: "queuedTimerStillSingleShot")
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.6) {
+            XCTAssertEqual(manager.takePictureCalledCount, 1)
+            exp.fulfill()
+        }
+        wait(for: [exp], timeout: 1.5)
+
+        subject.send(completion: .failure(StubCaptureError.failed))
+    }
+
+    func testAbortDuringProcessingShouldCancelAndAllowRetry() {
+        let subject = PassthroughSubject<AVCapturePhoto, Error>()
+        let manager = StubCameraManager(publisher: subject.eraseToAnyPublisher())
+        manager.session.startRunning()
+
+        let sut = CameraViewModel(cameraManager: manager)
+
+        XCTAssertTrue(sut.beginCapture())
+        sut.takePic()
+        XCTAssertEqual(sut.captureState, .capturing)
+
+        sut.cancelCaptureIfNeeded()
+        XCTAssertEqual(sut.captureState, .cancelled)
+        XCTAssertFalse(sut.isResultNavigationInProgress)
+
+        sut.resetCaptureState()
+        XCTAssertEqual(sut.captureState, .idle)
+
+        let beginRetry = sut.beginCapture()
+        XCTAssertTrue(beginRetry)
+        sut.takePic()
+
+        let exp = expectation(description: "secondCaptureStartsAfterCancel")
+        DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) {
+            XCTAssertEqual(manager.takePictureCalledCount, 1)
+            exp.fulfill()
+        }
+        wait(for: [exp], timeout: 2.0)
+
+        subject.send(completion: .failure(StubCaptureError.failed))
+    }
+
+    func testResultNavigationFlowIsIdempotent() {
+        let sut = CameraViewModel()
+
+        XCTAssertTrue(sut.beginCapture())
+        sut.beginResultNavigation()
+        sut.beginResultNavigation() // 중복 호출은 상태만 유지되어야 함
+
+        XCTAssertTrue(sut.isResultNavigationInProgress)
+        XCTAssertFalse(sut.beginCapture())
+
+        sut.finishResultNavigation()
+        XCTAssertFalse(sut.isResultNavigationInProgress)
+
+        // finish를 여러 번 호출해도 안정적으로 정리되어야 함
+        sut.finishResultNavigation()
+        XCTAssertFalse(sut.isResultNavigationInProgress)
+    }
 }
