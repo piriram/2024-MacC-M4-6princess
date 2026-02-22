@@ -7,6 +7,8 @@ struct PhotosPickerView: View {
     
     @StateObject private var vm: PhotosPickerViewModel = PhotosPickerViewModel()
     @State private var isPresented: Bool = false
+    @State private var photoAccessDenied = false
+    @State private var permissionChecked = false
     @EnvironmentObject var naviManager: NavigationManager
     @EnvironmentObject var frameManager: FrameManager
 
@@ -14,41 +16,46 @@ struct PhotosPickerView: View {
         ZStack {
             VStack {
                 toolbarButton
-                ImageScrollViewRepresentable(
-                    images: vm.models,
-                    onScrollToBottom: {
-                        if vm.canLoadMorePages {
-                            let addedRange = vm.fetchNextPage()
-                            if addedRange.isEmpty {
-                                return
+                if vm.models.isEmpty && permissionChecked {
+                    emptyStateView
+                        .padding(.top, 40)
+                } else {
+                    ImageScrollViewRepresentable(
+                        images: vm.models,
+                        onScrollToBottom: {
+                            if vm.canLoadMorePages {
+                                let addedRange = vm.fetchNextPage()
+                                if addedRange.isEmpty {
+                                    return
+                                }
+
+                                for i in addedRange {
+                                    vm.loadImage(for: vm.album[i], index: i)
+                                }
                             }
+                        },
+                        onVisibleIndexChange: { index in
+                            vm.prefetchAround(index: index)
+                        },
+                        onImageTap: { index in
+                            guard index < vm.models.count, index < vm.album.count else { return }
 
-                            for i in addedRange {
-                                vm.loadImage(for: vm.album[i], index: i)
+                            if vm.selectedIndex >= 0 {
+                                vm.models[vm.selectedIndex].isSelected = false
+                            }
+                            vm.selectedIndex = index
+                            vm.models[index].isSelected = true
+
+                            let tappedModel = vm.models[index]
+                            vm.getImage(image: tappedModel, for: vm.album[index]) { image in
+                                guard let image, vm.selectedIndex == index else { return }
+                                frameManager.pickedImage = image
+                                naviManager.push(screen: Screen.frameEdit)
                             }
                         }
-                    },
-                    onVisibleIndexChange: { index in
-                        vm.prefetchAround(index: index)
-                    },
-                    onImageTap: { index in
-                        guard index < vm.models.count, index < vm.album.count else { return }
-
-                        if vm.selectedIndex >= 0 {
-                            vm.models[vm.selectedIndex].isSelected = false
-                        }
-                        vm.selectedIndex = index
-                        vm.models[index].isSelected = true
-
-                        let tappedModel = vm.models[index]
-                        vm.getImage(image: tappedModel, for: vm.album[index]) { image in
-                            guard let image, vm.selectedIndex == index else { return }
-                            frameManager.pickedImage = image
-                            naviManager.push(screen: Screen.frameEdit)
-                        }
-                    }
-                )
-                .padding(.top, 10)
+                    )
+                    .padding(.top, 10)
+                }
             }
             VStack {
                 toastMessage
@@ -64,15 +71,28 @@ struct PhotosPickerView: View {
             }
 
             PHPhotoLibrary.requestAuthorization(for: .readWrite) { status in
-                if status == .authorized {
-                    if vm.firstAppear {
-                        let initialRange = vm.fetchInitialAlbum()
-                        if !initialRange.isEmpty {
-                            for i in initialRange {
-                                vm.loadImage(for: vm.album[i], index: i)
+                DispatchQueue.main.async {
+                    permissionChecked = true
+
+                    switch status {
+                    case .authorized, .limited:
+                        photoAccessDenied = false
+
+                        if vm.firstAppear || vm.models.isEmpty {
+                            let initialRange = vm.fetchInitialAlbum()
+                            if !initialRange.isEmpty {
+                                for i in initialRange {
+                                    vm.loadImage(for: vm.album[i], index: i)
+                                }
                             }
+                            vm.firstAppear = false
                         }
-                        vm.firstAppear = false
+                    case .denied, .restricted:
+                        photoAccessDenied = true
+                    case .notDetermined:
+                        break
+                    @unknown default:
+                        break
                     }
                 }
             }
@@ -112,6 +132,27 @@ extension PhotosPickerView {
 }
 
 extension PhotosPickerView {
+    var emptyStateView: some View {
+        VStack(spacing: 12) {
+            Image(systemName: photoAccessDenied ? "lock.slash" : "photo.on.rectangle")
+                .font(.system(size: 28, weight: .semibold))
+                .foregroundStyle(.gray)
+
+            Text(photoAccessDenied ? "사진 접근 권한이 필요해요." : "표시할 사진이 없어요.")
+                .font(.headline)
+                .foregroundStyle(.gray01)
+
+            Text(photoAccessDenied
+                 ? "설정 > 개인정보 보호 및 보안 > 사진에서 접근 권한을 허용해 주세요."
+                 : "앨범에 사진이 없거나 접근 가능한 사진이 없습니다.\n시뮬레이터라면 Photos 앱에 이미지를 먼저 추가해 주세요.")
+                .font(.footnote)
+                .multilineTextAlignment(.center)
+                .foregroundStyle(.gray)
+                .padding(.horizontal, 24)
+        }
+        .frame(maxWidth: .infinity)
+    }
+
     var toolbarButton: some View {
         
         HStack {
