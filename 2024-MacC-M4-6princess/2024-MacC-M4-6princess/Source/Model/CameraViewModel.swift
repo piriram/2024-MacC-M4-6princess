@@ -57,6 +57,8 @@ class CameraViewModel: NSObject, ObservableObject {
     // 기존 뷰에서 쓰던 하위호환 플래그
     @Published var frameSize = CGRect(origin: .zero, size: .zero)
     @Published var preview: AVCaptureVideoPreviewLayer!
+    @Published private(set) var isUsingSampleCamera: Bool = false
+    @Published private(set) var samplePreviewImage: UIImage?
 
     // 프레임 관련 상태
     @Published var frameRatio: CGFloat = 4/3
@@ -92,38 +94,36 @@ class CameraViewModel: NSObject, ObservableObject {
     @Published var idolImg: UIImage
     let defaultImg: UIImage
     var ScreenSize:CGSize = UIScreen.main.bounds.size
-    let cameraManager: CameraManager
+    private var cameraProvider: CameraProviding
     let motionManager = MotionManager()
     private var cancellables: Set<AnyCancellable> = []
 
-    init(cameraManager: CameraManager = CameraManager()) {
-        self.cameraManager = cameraManager
+    init(cameraProvider: CameraProviding = CameraProviderFactory.makeDefault()) {
+        self.cameraProvider = cameraProvider
         self.idolImg = UIImage(named: "Felix") ?? UIImage()
         self.defaultImg = UIImage(named: "whiteBG") ?? UIImage()
         super.init()
         setupPreviewLayer()
-
-        if cameraManager.deviceType == .builtInWideAngleCamera {
-            self.currentZoomFactor = 2.0
-        }
-        else {
-            self.currentZoomFactor = 1.0
-        }
+        syncProviderState()
         _ = motionManager
     }
 
+    convenience init(cameraManager: CameraManager) {
+        self.init(cameraProvider: DeviceCameraProvider(cameraManager: cameraManager))
+    }
+
     private func setupPreviewLayer() {
-        preview = AVCaptureVideoPreviewLayer(session: cameraManager.session)
+        preview = AVCaptureVideoPreviewLayer(session: cameraProvider.session)
         preview.videoGravity = .resizeAspectFill
     }
 
-    func handleCapturedPhoto(_ photo: AVCapturePhoto) {
+    func handleCapturedPhoto(_ frame: CameraCaptureFrame) {
         guard !routeToResult,
               captureState != .readyToNavigate,
               !isResultNavigationInProgress else { return }
 
         do {
-            let image = try makeCapturedImage(from: photo)
+            let image = try makeCapturedImage(from: frame)
             applyCapturedPhoto(image)
         } catch {
             handleCaptureError(error)
@@ -148,29 +148,37 @@ class CameraViewModel: NSObject, ObservableObject {
         self.isTakePic = false
     }
 
-    private func makeCapturedImage(from photo: AVCapturePhoto) throws -> UIImage {
-        guard let imageData = photo.fileDataRepresentation() else {
-            print("사진 데이터가 유효하지 않음")
-            throw CapturePipelineError.invalidPhotoData
-        }
-        guard var image = UIImage(data: imageData) else {
-            print("이미지를 생성할 수 없습니다.")
-            throw CapturePipelineError.invalidImage
+    private func makeCapturedImage(from frame: CameraCaptureFrame) throws -> UIImage {
+        var capturedImage: UIImage
+
+        switch frame {
+        case .photo(let photo):
+            guard let imageData = photo.fileDataRepresentation() else {
+                print("사진 데이터가 유효하지 않음")
+                throw CapturePipelineError.invalidPhotoData
+            }
+            guard let decoded = UIImage(data: imageData) else {
+                print("이미지를 생성할 수 없습니다.")
+                throw CapturePipelineError.invalidImage
+            }
+            capturedImage = decoded
+        case .image(let providedImage):
+            capturedImage = providedImage
         }
 
         // 전면 카메라일 경우 좌우 반전 처리
-        if self.cameraManager.videoDeviceInput?.device.position == .front {
-            guard let mirroredCGImage = image.cgImage else {
+        if cameraProvider.cameraPosition == .front {
+            guard let mirroredCGImage = capturedImage.cgImage else {
                 print("전면 카메라 이미지 처리 실패: cgImage 없음")
                 throw CapturePipelineError.invalidImage
             }
-            image = UIImage(cgImage: mirroredCGImage, scale: image.scale, orientation: .leftMirrored)
+            capturedImage = UIImage(cgImage: mirroredCGImage, scale: capturedImage.scale, orientation: .leftMirrored)
         }
 
         // 이미지의 방향을 .up으로 수정. 이미지 프리뷰를 위함
-        image = fixOrientation(image)
+        capturedImage = fixOrientation(capturedImage)
 
-        let croppedImage = cropToAspectRatio(image: image)
+        let croppedImage = cropToAspectRatio(image: capturedImage)
         guard let croppedCGImage = croppedImage.cgImage else {
             throw CapturePipelineError.cropFailed
         }
@@ -248,23 +256,23 @@ class CameraViewModel: NSObject, ObservableObject {
             return
         }
 
-        let delay = cameraManager.session.isRunning ? 0.0 : 0.5
+        let delay = cameraProvider.isSessionRunning ? 0.0 : 0.5
         captureState = .capturing
         isTakenPhoto = true
 
         Just(())
             .delay(for: .seconds(delay), scheduler: DispatchQueue.main)
-            .flatMap { [weak self] _ -> AnyPublisher<AVCapturePhoto, Error> in
+            .flatMap { [weak self] _ -> AnyPublisher<CameraCaptureFrame, Error> in
                 guard let self else {
                     return Fail(error: CapturePipelineError.viewModelDeallocated)
                         .eraseToAnyPublisher()
                 }
-                return self.cameraManager.takePicture()
+                return self.cameraProvider.takePicture()
             }
-            .tryMap { [weak self] photo -> UIImage in
+            .tryMap { [weak self] frame -> UIImage in
                 guard let self else { throw CapturePipelineError.viewModelDeallocated }
                 self.captureState = .processing
-                return try self.makeCapturedImage(from: photo)
+                return try self.makeCapturedImage(from: frame)
             }
             .receive(on: DispatchQueue.main)
             .sink(
@@ -354,14 +362,52 @@ class CameraViewModel: NSObject, ObservableObject {
         errorMessage = ""
     }
 
+    func refreshRuntimeDependencies() {
+        cameraProvider.stopSession()
+        cameraProvider = CameraProviderFactory.makeDefault()
+        syncProviderState()
+        setupPreviewLayer()
+    }
+
+    private func syncProviderState() {
+        if cameraProvider.deviceType == .builtInWideAngleCamera {
+            currentZoomFactor = 2.0
+        } else {
+            currentZoomFactor = 1.0
+        }
+        cameraPosition = cameraProvider.cameraPosition
+        isUsingSampleCamera = cameraProvider.isSampleProvider
+        samplePreviewImage = cameraProvider.samplePreviewImage
+    }
+
+    var activeDeviceType: AVCaptureDevice.DeviceType {
+        cameraProvider.deviceType
+    }
+
+    var previewSession: AVCaptureSession {
+        cameraProvider.session
+    }
+
+    func checkVideoAuthorization() {
+        cameraProvider.checkVideoAuthorizaion()
+    }
+
+    func startCameraSession() {
+        cameraProvider.startSession()
+    }
+
+    func stopCameraSession() {
+        cameraProvider.stopSession()
+    }
+
     //카메라 전후면 전환(초기 줌 팩터를 다시 맞춰줌)
     func changeCamera() {
-        cameraManager.changeCamera()
-        cameraPosition = cameraManager.videoDeviceInput?.device.position ?? .back
+        cameraProvider.changeCamera()
+        cameraPosition = cameraProvider.cameraPosition
 
         // 카메라 전환 시 적절한 초기 줌 팩터 설정
         if cameraPosition == .back {
-            if cameraManager.deviceType == .builtInUltraWideCamera {
+            if cameraProvider.deviceType == .builtInUltraWideCamera {
                 currentZoomFactor = 2.0
             } else {
                 currentZoomFactor = 1.0
@@ -400,29 +446,36 @@ class CameraViewModel: NSObject, ObservableObject {
         var newZoomFactor = currentZoomFactor * delta
 
         // 최소/최대 줌 팩터 제한
-        if let device = cameraManager.videoDeviceInput?.device {
+        if let device = cameraProvider.videoDeviceInput?.device {
             let minZoom: CGFloat = 1.0
             let maxZoom: CGFloat = device.deviceType == .builtInUltraWideCamera ? 4.0 : 3.0
             newZoomFactor = min(max(newZoomFactor, minZoom), maxZoom)
 
             // 줌 적용
-            cameraManager.zoom(newZoomFactor)
+            cameraProvider.zoom(newZoomFactor)
 
             // currentZoomFactor 실시간 업데이트
             withAnimation(.spring(response: 0.3, dampingFraction: 0.6)) {
                 currentZoomFactor = newZoomFactor
+            }
+        } else {
+            withAnimation(.spring(response: 0.3, dampingFraction: 0.6)) {
+                currentZoomFactor = min(max(newZoomFactor, 1.0), 4.0)
             }
         }
     }
 
     //해당 factor로 줌을 해주는 함수
     func setZoom(factor: CGFloat) {
-        guard let device = cameraManager.videoDeviceInput?.device else { return }
+        guard let device = cameraProvider.videoDeviceInput?.device else {
+            currentZoomFactor = factor
+            return
+        }
 
         do {
             try device.lockForConfiguration()
             let actualZoomFactor = if device.position == .back {
-                if cameraManager.deviceType == .builtInUltraWideCamera {
+                if cameraProvider.deviceType == .builtInUltraWideCamera {
                     factor
                 } else {
                     factor * 2

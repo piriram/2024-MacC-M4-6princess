@@ -6,11 +6,13 @@ enum SubjectMaskingError: Error {
     case noResult
 }
 
-protocol SubjectMaskingServicing {
+protocol CutoutEngine {
     func makeMask(from inputImage: CIImage) throws -> CIImage
 }
 
-struct VisionSubjectMaskingService: SubjectMaskingServicing {
+typealias SubjectMaskingServicing = CutoutEngine
+
+struct RealCutoutEngine: CutoutEngine {
     func makeMask(from inputImage: CIImage) throws -> CIImage {
         let handler = VNImageRequestHandler(ciImage: inputImage)
         let request = VNGenerateForegroundInstanceMaskRequest()
@@ -26,23 +28,34 @@ struct VisionSubjectMaskingService: SubjectMaskingServicing {
     }
 }
 
-struct StubSubjectMaskingService: SubjectMaskingServicing {
+struct MockCutoutEngine: CutoutEngine {
     func makeMask(from inputImage: CIImage) throws -> CIImage {
         CIImage(color: CIColor(red: 1, green: 1, blue: 1, alpha: 1)).cropped(to: inputImage.extent)
     }
 }
 
-enum SubjectMaskingServiceFactory {
-    static func makeDefault() -> SubjectMaskingServicing {
+// Backward-compatible aliases for existing tests/references.
+typealias VisionSubjectMaskingService = RealCutoutEngine
+typealias StubSubjectMaskingService = MockCutoutEngine
+
+enum CutoutEngineFactory {
+    static func makeDefault() -> CutoutEngine {
         let env = ProcessInfo.processInfo.environment
         if env["USE_STUB_MASK"] == "1" {
-            return StubSubjectMaskingService()
+            return MockCutoutEngine()
         }
 
-        #if targetEnvironment(simulator)
-        return StubSubjectMaskingService()
-        #else
-        return VisionSubjectMaskingService()
-        #endif
+        switch RuntimeTestingOptions.cutoutEngine() {
+        case .real:
+            return RealCutoutEngine()
+        case .mock:
+            return MockCutoutEngine()
+        }
+    }
+}
+
+enum SubjectMaskingServiceFactory {
+    static func makeDefault() -> SubjectMaskingServicing {
+        CutoutEngineFactory.makeDefault()
     }
 }

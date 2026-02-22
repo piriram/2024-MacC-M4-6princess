@@ -22,11 +22,20 @@ struct CameraView: View {
 
     private var cameraPreview: some View  {
         GeometryReader { geo in
-            CameraPreview(viewModel: viewModel)
-                .frame(width: geo.size.width, height: geo.size.width * viewModel.frameRatio)
-                .onAppear {
-                    viewModel.frameSize.size = CGSize(width: geo.size.width, height: geo.size.width * viewModel.frameRatio)
+            Group {
+                if viewModel.isUsingSampleCamera, let sampleImage = viewModel.samplePreviewImage {
+                    Image(uiImage: sampleImage)
+                        .resizable()
+                        .scaledToFill()
+                } else {
+                    CameraPreview(viewModel: viewModel)
                 }
+            }
+            .frame(width: geo.size.width, height: geo.size.width * viewModel.frameRatio)
+            .clipped()
+            .onAppear {
+                viewModel.frameSize.size = CGSize(width: geo.size.width, height: geo.size.width * viewModel.frameRatio)
+            }
             //            Group{
             //                if let image = frameManager.resultImage {
             //                    Image(uiImage: image)
@@ -162,15 +171,16 @@ struct CameraView: View {
             if isActuallyiPad() {
                 viewModel.showOrientationAlert = true
             }
+            viewModel.refreshRuntimeDependencies()
             viewModel.resetCaptureState()
-            viewModel.cameraManager.checkVideoAuthorizaion()
+            viewModel.checkVideoAuthorization()
             viewModel.isTakePic = false
             Analytics.logEvent("A1_카메라", parameters: nil)
         }
         .onDisappear {
             motionManager.stopDeviceMotionUpdates()
             viewModel.cancelCaptureIfNeeded(showCancellationError: false)
-            viewModel.cameraManager.stopSession()
+            viewModel.stopCameraSession()
         }
 
     }

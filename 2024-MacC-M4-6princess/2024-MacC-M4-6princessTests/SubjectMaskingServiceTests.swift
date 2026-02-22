@@ -3,6 +3,11 @@ import CoreImage
 @testable import _024_MacC_M4_6princess
 
 final class SubjectMaskingServiceTests: XCTestCase {
+    override func setUp() {
+        super.setUp()
+        RuntimeTestingOptions.setCutoutEngine(.mock)
+    }
+
     func testStubMaskKeepsInputExtent() throws {
         let sut = StubSubjectMaskingService()
         let input = CIImage(color: .white).cropped(to: CGRect(x: 0, y: 0, width: 320, height: 240))
@@ -15,11 +20,7 @@ final class SubjectMaskingServiceTests: XCTestCase {
     func testFactoryReturnsStubOnSimulator() {
         let service = SubjectMaskingServiceFactory.makeDefault()
 
-        #if targetEnvironment(simulator)
-        XCTAssertTrue(String(describing: type(of: service)).contains("StubSubjectMaskingService"))
-        #else
-        XCTAssertFalse(String(describing: type(of: service)).contains("StubSubjectMaskingService"))
-        #endif
+        XCTAssertTrue(String(describing: type(of: service)).contains("MockCutoutEngine"))
     }
 
     func testFactoryReturnsStubWhenUseStubMaskEnvIsSet() {
@@ -28,6 +29,6 @@ final class SubjectMaskingServiceTests: XCTestCase {
 
         let service = SubjectMaskingServiceFactory.makeDefault()
 
-        XCTAssertTrue(String(describing: type(of: service)).contains("StubSubjectMaskingService"))
+        XCTAssertTrue(String(describing: type(of: service)).contains("MockCutoutEngine"))
     }
 }

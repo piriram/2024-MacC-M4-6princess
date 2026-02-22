@@ -13,7 +13,7 @@ struct CamZoomButtonView: View {
         
         func isSelected(viewModel: CameraViewModel) -> Bool {
             let factor = viewModel.currentZoomFactor
-            let isUltraWide = viewModel.cameraManager.deviceType == .builtInUltraWideCamera
+            let isUltraWide = viewModel.activeDeviceType == .builtInUltraWideCamera
             
             switch self {
             case .ultraWide:
@@ -103,7 +103,7 @@ struct CamZoomButtonView: View {
                 ZoomButton(
                     text: option.displayText(for: viewModel.cameraPosition,
                                              currentZoom: isZoomSelected(option: option, currentZoom: viewModel.currentZoomFactor) ? viewModel.currentZoomFactor : option.zoomFactor(for: viewModel.cameraPosition),
-                                             isUltraWide: viewModel.cameraManager.deviceType == .builtInUltraWideCamera),
+                                             isUltraWide: viewModel.activeDeviceType == .builtInUltraWideCamera),
                     isSelected: isZoomSelected(option: option, currentZoom: viewModel.currentZoomFactor)
                 ) {
                     viewModel.setZoom(factor: option.zoomFactor(for: viewModel.cameraPosition))
@@ -120,7 +120,7 @@ struct CamZoomButtonView: View {
     }
     
     private var availableZoomOptions: [ZoomOption] {
-        let isUltraWide = viewModel.cameraManager.deviceType == .builtInUltraWideCamera
+        let isUltraWide = viewModel.activeDeviceType == .builtInUltraWideCamera
         let isBackCamera = viewModel.cameraPosition == .back
         
         if isBackCamera {
@@ -132,7 +132,7 @@ struct CamZoomButtonView: View {
         }
     }
     private func isZoomSelected(option: ZoomOption, currentZoom: CGFloat) -> Bool {
-        let isUltraWide = viewModel.cameraManager.deviceType == .builtInUltraWideCamera
+        let isUltraWide = viewModel.activeDeviceType == .builtInUltraWideCamera
         
         if viewModel.cameraPosition == .back {
             if isUltraWide {

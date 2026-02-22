@@ -146,6 +146,7 @@ struct DFEditView: View {
             )
         }
         .onAppear {
+            viewModel.reloadCutoutEngineFromRuntimeSettings()
             viewModel.showMaskImage(content: pickedImageRender)
             Analytics.logEvent("A4_누끼따기", parameters: nil)
         }

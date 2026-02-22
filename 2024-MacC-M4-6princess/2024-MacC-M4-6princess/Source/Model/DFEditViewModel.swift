@@ -42,10 +42,14 @@ class DFEditViewModel: ObservableObject {
     let analyzer = ImageAnalyzer()
     let interaction = ImageAnalysisInteraction()
     private let imagePipeline: ImagePipelining = ImagePipelineService()
-    private let maskingService: SubjectMaskingServicing
+    private var maskingService: SubjectMaskingServicing
 
     init(maskingService: SubjectMaskingServicing = SubjectMaskingServiceFactory.makeDefault()) {
         self.maskingService = maskingService
+    }
+
+    func reloadCutoutEngineFromRuntimeSettings() {
+        maskingService = SubjectMaskingServiceFactory.makeDefault()
     }
 
     private func reportError(_ error: AppError, debug: String? = nil) {

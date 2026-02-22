@@ -24,9 +24,25 @@ extension CameraTopView{
                 
             }
             .padding(.trailing, 20)
+            #if DEBUG
+            Button {
+                showDebugOptions = true
+            } label: {
+                Image(systemName: "ladybug")
+                    .font(.system(size: 20))
+                    .foregroundStyle(.black)
+            }
+            .padding(.trailing, 16)
+            #endif
         }
         .frame(width: UIScreen.main.bounds.width, height: 46)
         .background(.white)
+        .sheet(isPresented: $showDebugOptions) {
+            CameraDebugOptionsView {
+                viewModel.refreshRuntimeDependencies()
+                viewModel.checkVideoAuthorization()
+            }
+        }
         
     }
 }
@@ -92,14 +108,14 @@ extension FilteredImageView{
         .frame(height: 124)
         .onAppear {
             DispatchQueue.global(qos: .userInitiated).async {
-                viewModel.cameraManager.startSession()
+                viewModel.startCameraSession()
                 DispatchQueue.main.async {
                     reloadFilterImages()
                 }
             }
         }
         .onDisappear {
-            viewModel.cameraManager.stopSession()
+            viewModel.stopCameraSession()
         }
         .onChange(of: filterImages.count) { _ in
             reloadFilterImages()
