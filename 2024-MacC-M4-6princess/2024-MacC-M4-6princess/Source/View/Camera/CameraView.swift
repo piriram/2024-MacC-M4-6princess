@@ -12,6 +12,7 @@ import FirebaseAnalytics
 
 struct CameraView: View {
     @Environment(\.managedObjectContext) var viewContext
+    @Environment(\.scenePhase) private var scenePhase
     @EnvironmentObject var naviManager: NavigationManager
     @EnvironmentObject var frameManager: FrameManager
     @EnvironmentObject var imageModel: ImageListModel
@@ -65,6 +66,10 @@ struct CameraView: View {
                 }
             }
         )
+    }
+
+    private func logCameraStartup(_ message: String) {
+        print("[CameraStartup] \(message)")
     }
 
     var body: some View {
@@ -170,20 +175,25 @@ struct CameraView: View {
             Alert(title: Text("오류 발생"), message: Text(viewModel.errorMessage), dismissButton: .default(Text("확인")))
         }
         .onAppear {
+            logCameraStartup("CameraView onAppear")
             motionManager.startDeviceMotionUpdates()
             if isActuallyiPad() {
                 viewModel.showOrientationAlert = true
             }
-            viewModel.refreshRuntimeDependencies()
             viewModel.resetCaptureState()
-            viewModel.checkVideoAuthorization()
+            viewModel.handleCameraViewAppear()
             viewModel.isTakePic = false
             Analytics.logEvent("A1_카메라", parameters: nil)
         }
         .onDisappear {
+            logCameraStartup("CameraView onDisappear")
             motionManager.stopDeviceMotionUpdates()
             viewModel.cancelCaptureIfNeeded(showCancellationError: false)
-            viewModel.stopCameraSession()
+            viewModel.handleCameraViewDisappear()
+        }
+        .onChange(of: scenePhase) { newPhase in
+            logCameraStartup("scenePhase changed to \(String(describing: newPhase))")
+            viewModel.handleScenePhaseChange(newPhase)
         }
 
     }
