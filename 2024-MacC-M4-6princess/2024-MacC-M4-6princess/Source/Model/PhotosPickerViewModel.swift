@@ -105,7 +105,6 @@ class PhotosPickerViewModel: ObservableObject {
         let options = PHFetchOptions()
         options.fetchLimit = limit
         options.includeHiddenAssets = false
-        options.includeAssetSourceTypes = [.typeUserLibrary]
         options.sortDescriptors = [NSSortDescriptor(key: "creationDate", ascending: false)]
 
         isLoadingPage = true
