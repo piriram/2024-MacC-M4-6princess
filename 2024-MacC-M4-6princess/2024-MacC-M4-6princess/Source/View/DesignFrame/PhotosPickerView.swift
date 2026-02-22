@@ -49,7 +49,11 @@ struct PhotosPickerView: View {
 
                             let tappedModel = vm.models[index]
                             vm.getImage(image: tappedModel, for: vm.album[index]) { image in
-                                guard let image, vm.selectedIndex == index else { return }
+                                guard vm.selectedIndex == index else { return }
+                                guard let image else {
+                                    print("[PhotoImport] failed to open selected asset index=\(index) id=\(vm.album[index].localIdentifier)")
+                                    return
+                                }
                                 frameManager.pickedImage = image
                                 naviManager.push(screen: Screen.frameEdit)
                             }

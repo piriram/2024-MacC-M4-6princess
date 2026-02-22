@@ -1,5 +1,6 @@
 import SwiftUI
 import Photos
+import UIKit
 
 enum PhotoImportQualityOption: String, CaseIterable, Identifiable {
     case original
@@ -161,25 +162,43 @@ class PhotosPickerViewModel: ObservableObject {
         let requestOptions = PHImageRequestOptions()
         requestOptions.isNetworkAccessAllowed = true
         requestOptions.deliveryMode = .highQualityFormat
-        requestOptions.version = .current
+        requestOptions.version = .original
+        requestOptions.resizeMode = .none
         requestOptions.isSynchronous = false
 
         outputImage = nil
-        imageManager.requestImageDataAndOrientation(for: asset, options: requestOptions) { [weak self] data, _, _, _ in
+        imageManager.requestImageDataAndOrientation(for: asset, options: requestOptions) { [weak self] data, _, _, info in
             guard let self else { return }
             guard image.identifier == asset.localIdentifier else { return }
 
             DispatchQueue.main.async {
-                guard let data, let fullResolutionImage = UIImage(data: data) else {
-                    completionHandler(nil)
+                if let data, let fullResolutionImage = UIImage(data: data) {
+                    let processed = self.processedImage(from: fullResolutionImage)
+                    print("[PhotoImport] quality=\(self.selectedImportQuality.rawValue) original=\(Int(fullResolutionImage.size.width))x\(Int(fullResolutionImage.size.height)) output=\(Int(processed.size.width))x\(Int(processed.size.height))")
+                    self.outputImage = processed
+                    completionHandler(processed)
                     return
                 }
 
-                let processed = self.processedImage(from: fullResolutionImage)
-                print("[PhotoImport] quality=\(self.selectedImportQuality.rawValue) original=\(Int(fullResolutionImage.size.width))x\(Int(fullResolutionImage.size.height)) output=\(Int(processed.size.width))x\(Int(processed.size.height))")
+                let errorDescription = (info?[PHImageErrorKey] as? Error)?.localizedDescription ?? "unknown"
+                let inCloud = (info?[PHImageResultIsInCloudKey] as? Bool) ?? false
+                print("[PhotoImport] requestImageDataAndOrientation failed id=\(asset.localIdentifier) inCloud=\(inCloud) error=\(errorDescription)")
 
-                self.outputImage = processed
-                completionHandler(processed)
+                self.loadImageFromContentEditingInput(asset: asset) { fallbackImage in
+                    DispatchQueue.main.async {
+                        guard image.identifier == asset.localIdentifier else { return }
+
+                        if let fallbackImage {
+                            let processed = self.processedImage(from: fallbackImage)
+                            print("[PhotoImport] contentEditingInput fallback success original=\(Int(fallbackImage.size.width))x\(Int(fallbackImage.size.height)) output=\(Int(processed.size.width))x\(Int(processed.size.height))")
+                            self.outputImage = processed
+                            completionHandler(processed)
+                        } else {
+                            print("[PhotoImport] contentEditingInput fallback failed id=\(asset.localIdentifier)")
+                            completionHandler(nil)
+                        }
+                    }
+                }
             }
         }
     }
@@ -193,14 +212,52 @@ class PhotosPickerViewModel: ObservableObject {
             targetSize: Constants.thumbnailTargetSize,
             contentMode: .aspectFill,
             options: requestOptions
-        ) { [weak self] result, _ in
+        ) { [weak self] result, info in
             guard let self else { return }
             guard identifier == asset.localIdentifier else { return }
-
             guard index < self.models.count else { return }
+
             if let image = result {
                 DispatchQueue.main.async {
                     self.saveImageArray(index: index, image: image, identifier: identifier)
+                }
+                return
+            }
+
+            let errorDescription = (info?[PHImageErrorKey] as? Error)?.localizedDescription ?? "unknown"
+            let inCloud = (info?[PHImageResultIsInCloudKey] as? Bool) ?? false
+            print("[PhotoThumbnail] requestImage failed id=\(identifier) inCloud=\(inCloud) error=\(errorDescription)")
+
+            self.imageManager.requestImageDataAndOrientation(for: asset, options: requestOptions) { [weak self] data, _, _, fallbackInfo in
+                guard let self else { return }
+                guard identifier == asset.localIdentifier else { return }
+                guard index < self.models.count else { return }
+
+                if let data, let full = UIImage(data: data) {
+                    let thumbnail = full.thumbnailImage(targetSize: Constants.thumbnailTargetSize, contentMode: .scaleAspectFill)
+                    DispatchQueue.main.async {
+                        self.saveImageArray(index: index, image: thumbnail, identifier: identifier)
+                    }
+                    return
+                }
+
+                let fallbackError = (fallbackInfo?[PHImageErrorKey] as? Error)?.localizedDescription ?? "unknown"
+                print("[PhotoThumbnail] requestImageDataAndOrientation fallback failed id=\(identifier) error=\(fallbackError)")
+
+                self.loadImageFromContentEditingInput(asset: asset) { fallbackImage in
+                    guard identifier == asset.localIdentifier else { return }
+                    guard index < self.models.count else { return }
+
+                    DispatchQueue.main.async {
+                        if let fallbackImage {
+                            let thumbnail = fallbackImage.thumbnailImage(targetSize: Constants.thumbnailTargetSize, contentMode: .scaleAspectFill)
+                            self.saveImageArray(index: index, image: thumbnail, identifier: identifier)
+                        } else {
+                            self.saveImageArray(index: index,
+                                                image: self.unavailablePlaceholderImage(),
+                                                identifier: identifier)
+                        }
+                    }
                 }
             }
         }
@@ -239,6 +296,28 @@ class PhotosPickerViewModel: ObservableObject {
         return source.resized(maxLongEdge: maxLongEdge) ?? source
     }
 
+    private func loadImageFromContentEditingInput(asset: PHAsset, completion: @escaping (UIImage?) -> Void) {
+        let options = PHContentEditingInputRequestOptions()
+        options.isNetworkAccessAllowed = true
+
+        asset.requestContentEditingInput(with: options) { input, _ in
+            guard let url = input?.fullSizeImageURL,
+                  let data = try? Data(contentsOf: url),
+                  let image = UIImage(data: data) else {
+                completion(nil)
+                return
+            }
+            completion(image)
+        }
+    }
+
+    private func unavailablePlaceholderImage() -> UIImage {
+        if let symbol = UIImage(systemName: "icloud.slash") {
+            return symbol
+        }
+        return UIImage()
+    }
+
     private static func loadQualityOption(userDefaults: UserDefaults = .standard) -> PhotoImportQualityOption {
         guard let raw = userDefaults.string(forKey: Constants.qualityOptionKey),
               let value = PhotoImportQualityOption(rawValue: raw) else {
@@ -250,8 +329,9 @@ class PhotosPickerViewModel: ObservableObject {
     private func thumbnailRequestOptions() -> PHImageRequestOptions {
         let requestOptions = PHImageRequestOptions()
         requestOptions.isNetworkAccessAllowed = true
-        requestOptions.deliveryMode = .fastFormat
-        requestOptions.resizeMode = .fast
+        requestOptions.deliveryMode = .highQualityFormat
+        requestOptions.resizeMode = .exact
+        requestOptions.version = .original
         requestOptions.isSynchronous = false
         return requestOptions
     }
@@ -275,6 +355,32 @@ private extension UIImage {
 
         return renderer.image { _ in
             draw(in: CGRect(origin: .zero, size: targetSize))
+        }
+    }
+
+    func thumbnailImage(targetSize: CGSize, contentMode: UIView.ContentMode = .scaleAspectFill) -> UIImage {
+        guard targetSize.width > 0, targetSize.height > 0 else { return self }
+
+        let sourceSize = size
+        guard sourceSize.width > 0, sourceSize.height > 0 else { return self }
+
+        let widthRatio = targetSize.width / sourceSize.width
+        let heightRatio = targetSize.height / sourceSize.height
+        let scale = contentMode == .scaleAspectFill ? max(widthRatio, heightRatio) : min(widthRatio, heightRatio)
+
+        let drawSize = CGSize(width: sourceSize.width * scale, height: sourceSize.height * scale)
+        let origin = CGPoint(x: (targetSize.width - drawSize.width) / 2,
+                             y: (targetSize.height - drawSize.height) / 2)
+
+        let format = UIGraphicsImageRendererFormat.default()
+        format.scale = UIScreen.main.scale
+        format.opaque = true
+        let renderer = UIGraphicsImageRenderer(size: targetSize, format: format)
+
+        return renderer.image { _ in
+            UIColor.black.setFill()
+            UIBezierPath(rect: CGRect(origin: .zero, size: targetSize)).fill()
+            draw(in: CGRect(origin: origin, size: drawSize))
         }
     }
 }
