@@ -32,9 +32,21 @@ enum PhotoImportQualityOption: String, CaseIterable, Identifiable {
 class PhotosPickerViewModel: ObservableObject {
     private enum Constants {
         static let pageSize = 60
-        static let thumbnailTargetSize = CGSize(width: 180, height: 180)
+        static let gridItemWidthRatio: CGFloat = 0.32
+        static let gridItemHeightRatio: CGFloat = 0.2
         static let prefetchMargin = 30
         static let qualityOptionKey = "photo.import.quality.option"
+
+        static var thumbnailPointSize: CGSize {
+            CGSize(width: UIScreen.main.bounds.width * gridItemWidthRatio,
+                   height: UIScreen.main.bounds.height * gridItemHeightRatio)
+        }
+
+        static var thumbnailPixelTargetSize: CGSize {
+            let scale = UIScreen.main.scale
+            return CGSize(width: ceil(thumbnailPointSize.width * scale),
+                          height: ceil(thumbnailPointSize.height * scale))
+        }
     }
 
     @Published var models: [PickedImageModel] = []
@@ -121,7 +133,7 @@ class PhotosPickerViewModel: ObservableObject {
             let options = thumbnailRequestOptions()
             imageManager.stopCachingImages(
                 for: previousAssets,
-                targetSize: Constants.thumbnailTargetSize,
+                targetSize: Constants.thumbnailPixelTargetSize,
                 contentMode: .aspectFill,
                 options: options
             )
@@ -131,7 +143,7 @@ class PhotosPickerViewModel: ObservableObject {
             let options = thumbnailRequestOptions()
             imageManager.startCachingImages(
                 for: newAssets,
-                targetSize: Constants.thumbnailTargetSize,
+                targetSize: Constants.thumbnailPixelTargetSize,
                 contentMode: .aspectFill,
                 options: options
             )
@@ -209,7 +221,7 @@ class PhotosPickerViewModel: ObservableObject {
 
         imageManager.requestImage(
             for: asset,
-            targetSize: Constants.thumbnailTargetSize,
+            targetSize: Constants.thumbnailPixelTargetSize,
             contentMode: .aspectFill,
             options: requestOptions
         ) { [weak self] result, info in
@@ -226,7 +238,7 @@ class PhotosPickerViewModel: ObservableObject {
 
             let errorDescription = (info?[PHImageErrorKey] as? Error)?.localizedDescription ?? "unknown"
             let inCloud = (info?[PHImageResultIsInCloudKey] as? Bool) ?? false
-            print("[PhotoThumbnail] requestImage failed id=\(identifier) inCloud=\(inCloud) error=\(errorDescription)")
+            print("[PhotoThumbnail] requestImage failed id=\(identifier) target=\(Int(Constants.thumbnailPixelTargetSize.width))x\(Int(Constants.thumbnailPixelTargetSize.height)) inCloud=\(inCloud) error=\(errorDescription)")
 
             self.imageManager.requestImageDataAndOrientation(for: asset, options: requestOptions) { [weak self] data, _, _, fallbackInfo in
                 guard let self else { return }
@@ -234,7 +246,7 @@ class PhotosPickerViewModel: ObservableObject {
                 guard index < self.models.count else { return }
 
                 if let data, let full = UIImage(data: data) {
-                    let thumbnail = full.thumbnailImage(targetSize: Constants.thumbnailTargetSize, contentMode: .scaleAspectFill)
+                    let thumbnail = full.thumbnailImage(targetSize: Constants.thumbnailPointSize, contentMode: .scaleAspectFill)
                     DispatchQueue.main.async {
                         self.saveImageArray(index: index, image: thumbnail, identifier: identifier)
                     }
@@ -250,7 +262,7 @@ class PhotosPickerViewModel: ObservableObject {
 
                     DispatchQueue.main.async {
                         if let fallbackImage {
-                            let thumbnail = fallbackImage.thumbnailImage(targetSize: Constants.thumbnailTargetSize, contentMode: .scaleAspectFill)
+                            let thumbnail = fallbackImage.thumbnailImage(targetSize: Constants.thumbnailPointSize, contentMode: .scaleAspectFill)
                             self.saveImageArray(index: index, image: thumbnail, identifier: identifier)
                         } else {
                             self.saveImageArray(index: index,
