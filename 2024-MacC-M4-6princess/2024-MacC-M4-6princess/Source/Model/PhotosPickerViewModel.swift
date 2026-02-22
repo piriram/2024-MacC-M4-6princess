@@ -230,8 +230,22 @@ class PhotosPickerViewModel: ObservableObject {
             guard index < self.models.count else { return }
 
             if let image = result {
+                let isDegraded = (info?[PHImageResultIsDegradedKey] as? Bool) ?? false
+                let resultPixelSize = image.pixelSize
+                let targetPixelSize = Constants.thumbnailPixelTargetSize
+                let lowResolutionThreshold: CGFloat = 0.75
+                let isLowResolution = resultPixelSize.width < (targetPixelSize.width * lowResolutionThreshold)
+                    || resultPixelSize.height < (targetPixelSize.height * lowResolutionThreshold)
+
+                print("[PhotoThumbnail] requestImage success id=\(identifier) result=\(Int(resultPixelSize.width))x\(Int(resultPixelSize.height)) target=\(Int(targetPixelSize.width))x\(Int(targetPixelSize.height)) degraded=\(isDegraded)")
+
                 DispatchQueue.main.async {
                     self.saveImageArray(index: index, image: image, identifier: identifier)
+                }
+
+                if isLowResolution && !isDegraded {
+                    print("[PhotoThumbnail] low-resolution thumbnail detected id=\(identifier), forcing imageData fallback")
+                    self.loadThumbnailFromImageData(asset: asset, index: index, identifier: identifier, reason: "lowResolution")
                 }
                 return
             }
@@ -240,35 +254,44 @@ class PhotosPickerViewModel: ObservableObject {
             let inCloud = (info?[PHImageResultIsInCloudKey] as? Bool) ?? false
             print("[PhotoThumbnail] requestImage failed id=\(identifier) target=\(Int(Constants.thumbnailPixelTargetSize.width))x\(Int(Constants.thumbnailPixelTargetSize.height)) inCloud=\(inCloud) error=\(errorDescription)")
 
-            self.imageManager.requestImageDataAndOrientation(for: asset, options: requestOptions) { [weak self] data, _, _, fallbackInfo in
-                guard let self else { return }
+            self.loadThumbnailFromImageData(asset: asset, index: index, identifier: identifier, reason: "requestImageFailed")
+        }
+    }
+
+    private func loadThumbnailFromImageData(asset: PHAsset, index: Int, identifier: String, reason: String) {
+        let requestOptions = thumbnailRequestOptions()
+
+        imageManager.requestImageDataAndOrientation(for: asset, options: requestOptions) { [weak self] data, _, _, fallbackInfo in
+            guard let self else { return }
+            guard identifier == asset.localIdentifier else { return }
+            guard index < self.models.count else { return }
+
+            if let data, let full = UIImage(data: data) {
+                let thumbnail = full.thumbnailImage(targetSize: Constants.thumbnailPointSize, contentMode: .scaleAspectFill)
+                print("[PhotoThumbnail] imageData fallback success id=\(identifier) reason=\(reason) full=\(Int(full.pixelSize.width))x\(Int(full.pixelSize.height)) thumb=\(Int(thumbnail.pixelSize.width))x\(Int(thumbnail.pixelSize.height))")
+                DispatchQueue.main.async {
+                    self.saveImageArray(index: index, image: thumbnail, identifier: identifier)
+                }
+                return
+            }
+
+            let fallbackError = (fallbackInfo?[PHImageErrorKey] as? Error)?.localizedDescription ?? "unknown"
+            print("[PhotoThumbnail] imageData fallback failed id=\(identifier) reason=\(reason) error=\(fallbackError)")
+
+            self.loadImageFromContentEditingInput(asset: asset) { fallbackImage in
                 guard identifier == asset.localIdentifier else { return }
                 guard index < self.models.count else { return }
 
-                if let data, let full = UIImage(data: data) {
-                    let thumbnail = full.thumbnailImage(targetSize: Constants.thumbnailPointSize, contentMode: .scaleAspectFill)
-                    DispatchQueue.main.async {
+                DispatchQueue.main.async {
+                    if let fallbackImage {
+                        let thumbnail = fallbackImage.thumbnailImage(targetSize: Constants.thumbnailPointSize, contentMode: .scaleAspectFill)
+                        print("[PhotoThumbnail] contentEditingInput fallback success id=\(identifier) full=\(Int(fallbackImage.pixelSize.width))x\(Int(fallbackImage.pixelSize.height)) thumb=\(Int(thumbnail.pixelSize.width))x\(Int(thumbnail.pixelSize.height))")
                         self.saveImageArray(index: index, image: thumbnail, identifier: identifier)
-                    }
-                    return
-                }
-
-                let fallbackError = (fallbackInfo?[PHImageErrorKey] as? Error)?.localizedDescription ?? "unknown"
-                print("[PhotoThumbnail] requestImageDataAndOrientation fallback failed id=\(identifier) error=\(fallbackError)")
-
-                self.loadImageFromContentEditingInput(asset: asset) { fallbackImage in
-                    guard identifier == asset.localIdentifier else { return }
-                    guard index < self.models.count else { return }
-
-                    DispatchQueue.main.async {
-                        if let fallbackImage {
-                            let thumbnail = fallbackImage.thumbnailImage(targetSize: Constants.thumbnailPointSize, contentMode: .scaleAspectFill)
-                            self.saveImageArray(index: index, image: thumbnail, identifier: identifier)
-                        } else {
-                            self.saveImageArray(index: index,
-                                                image: self.unavailablePlaceholderImage(),
-                                                identifier: identifier)
-                        }
+                    } else {
+                        print("[PhotoThumbnail] contentEditingInput fallback failed id=\(identifier)")
+                        self.saveImageArray(index: index,
+                                            image: self.unavailablePlaceholderImage(),
+                                            identifier: identifier)
                     }
                 }
             }
@@ -350,6 +373,10 @@ class PhotosPickerViewModel: ObservableObject {
 }
 
 private extension UIImage {
+    var pixelSize: CGSize {
+        CGSize(width: size.width * scale, height: size.height * scale)
+    }
+
     func resized(maxLongEdge: CGFloat) -> UIImage? {
         let longEdge = max(size.width, size.height)
         guard longEdge > maxLongEdge, longEdge > 0 else {
