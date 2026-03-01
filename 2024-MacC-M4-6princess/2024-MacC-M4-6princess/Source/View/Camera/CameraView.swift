@@ -591,15 +591,14 @@ private final class CameraUIKitViewController: UIViewController {
         let isTallScreen = bounds.height / bounds.width > 2.0
         isTallScreenLayout = isTallScreen
 
-        let previewWidth: CGFloat
+        let previewWidth: CGFloat = bounds.width
         let previewHeight: CGFloat
 
         if isTallScreen {
-            previewWidth = bounds.width
             previewHeight = previewWidth * ratio
         } else {
-            previewHeight = max(bounds.height - 200, 0)
-            previewWidth = previewHeight / ratio
+            let maxPreviewHeight = max(bounds.height - 200, 0)
+            previewHeight = min(previewWidth * ratio, maxPreviewHeight)
         }
 
         previewWidthConstraint?.update(offset: previewWidth)
