@@ -616,6 +616,7 @@ private final class CameraUIKitViewController: UIViewController {
         newFrameLabel.isHidden = !isTallScreen
 
         viewModel.frameSize.size = CGSize(width: previewWidth, height: previewHeight)
+        previewContainerView.layoutIfNeeded()
         viewModel.preview?.frame = previewContainerView.bounds
 
         updateIconRotation(for: motionManager.currentOrientation)
@@ -638,11 +639,15 @@ private final class CameraUIKitViewController: UIViewController {
 
         guard let previewLayer = viewModel.preview else { return }
 
+        previewContainerView.layoutIfNeeded()
+        let previewBounds = previewContainerView.bounds
+        guard previewBounds.width > 1, previewBounds.height > 1 else { return }
+
         if previewLayer.superlayer !== previewContainerView.layer {
             previewLayer.removeFromSuperlayer()
             previewContainerView.layer.insertSublayer(previewLayer, at: 0)
         }
-        previewLayer.frame = previewContainerView.bounds
+        previewLayer.frame = previewBounds
     }
 
     private func updateFilterOverlay() {
@@ -1039,8 +1044,8 @@ private final class CameraTimerControlView: UIControl {
         addSubview(backgroundCapsuleView)
         backgroundCapsuleView.snp.makeConstraints { make in
             make.edges.equalToSuperview()
-            widthConstraint = make.width.equalTo(60).constraint
-            make.height.equalTo(30)
+            widthConstraint = make.width.equalTo(60).priority(.high).constraint
+            make.height.equalTo(30).priority(.high)
         }
 
         collapsedStackView.axis = .horizontal
@@ -1094,11 +1099,14 @@ private final class CameraTimerControlView: UIControl {
         backgroundCapsuleView.addSubview(expandedStackView)
 
         collapsedStackView.snp.makeConstraints { make in
-            make.edges.equalToSuperview().inset(UIEdgeInsets(top: 0, left: 5, bottom: 0, right: 5))
+            make.leading.greaterThanOrEqualToSuperview().offset(5)
+            make.trailing.lessThanOrEqualToSuperview().offset(-5)
+            make.center.equalToSuperview()
         }
 
         expandedStackView.snp.makeConstraints { make in
-            make.leading.trailing.equalToSuperview().inset(5)
+            make.leading.greaterThanOrEqualToSuperview().offset(5)
+            make.trailing.lessThanOrEqualToSuperview().offset(-5)
             make.centerY.equalToSuperview()
         }
 
