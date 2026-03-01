@@ -29,12 +29,18 @@ RSYNC_PROTECT_TMP_FILES=(--filter "P .*.??????")
 # Copies and strips a vendored framework
 install_framework()
 {
+  local source=""
   if [ -r "${BUILT_PRODUCTS_DIR}/$1" ]; then
-    local source="${BUILT_PRODUCTS_DIR}/$1"
+    source="${BUILT_PRODUCTS_DIR}/$1"
   elif [ -r "${BUILT_PRODUCTS_DIR}/$(basename "$1")" ]; then
-    local source="${BUILT_PRODUCTS_DIR}/$(basename "$1")"
+    source="${BUILT_PRODUCTS_DIR}/$(basename "$1")"
   elif [ -r "$1" ]; then
-    local source="$1"
+    source="$1"
+  fi
+
+  if [ -z "$source" ]; then
+    echo "warning: Missing framework source for $1, skipping embed"
+    return 0
   fi
 
   local destination="${TARGET_BUILD_DIR}/${FRAMEWORKS_FOLDER_PATH}"
