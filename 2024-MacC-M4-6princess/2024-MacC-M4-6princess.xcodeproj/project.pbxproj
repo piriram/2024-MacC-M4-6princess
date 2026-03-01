@@ -12,7 +12,6 @@
 		4EB66FB72D8DE9650042B399 /* Localizable.xcstrings in Resources */ = {isa = PBXBuildFile; fileRef = 4EB66FB62D8DE9650042B399 /* Localizable.xcstrings */; };
 		898B14F82CFD5F5800EA200A /* FirebaseAnalytics in Frameworks */ = {isa = PBXBuildFile; productRef = 898B14F72CFD5F5800EA200A /* FirebaseAnalytics */; };
 		898B14FA2CFD5F5800EA200A /* FirebaseAnalyticsWithoutAdIdSupport in Frameworks */ = {isa = PBXBuildFile; productRef = 898B14F92CFD5F5800EA200A /* FirebaseAnalyticsWithoutAdIdSupport */; };
-		898B159C2CFD8CCD00EA200A /* FirebaseAnalyticsOnDeviceConversion in Frameworks */ = {isa = PBXBuildFile; productRef = 898B159B2CFD8CCD00EA200A /* FirebaseAnalyticsOnDeviceConversion */; };
 		89938ADD2D7EC5F800EAD63B /* GoogleMobileAds in Frameworks */ = {isa = PBXBuildFile; productRef = 89938ADC2D7EC5F800EAD63B /* GoogleMobileAds */; };
 		89DC209F2D324E0D00C1BD4E /* FirebaseAppCheck in Frameworks */ = {isa = PBXBuildFile; productRef = 89DC209E2D324E0D00C1BD4E /* FirebaseAppCheck */; };
 		89DC20A12D324E2D00C1BD4E /* FirebaseStorage in Frameworks */ = {isa = PBXBuildFile; productRef = 89DC20A02D324E2D00C1BD4E /* FirebaseStorage */; };
@@ -55,8 +54,6 @@
 /* Begin PBXFileSystemSynchronizedRootGroup section */
 		89A94AB12CA9B64C00824592 /* 2024-MacC-M4-6princess */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
-			exceptions = (
-			);
 			path = "2024-MacC-M4-6princess";
 			sourceTree = "<group>";
 		};
@@ -71,7 +68,6 @@
 				89DC209F2D324E0D00C1BD4E /* FirebaseAppCheck in Frameworks */,
 				898B14F82CFD5F5800EA200A /* FirebaseAnalytics in Frameworks */,
 				4E5AFD0A2E01EC2F00307D91 /* FirebaseCrashlytics in Frameworks */,
-				898B159C2CFD8CCD00EA200A /* FirebaseAnalyticsOnDeviceConversion in Frameworks */,
 				89DC20A12D324E2D00C1BD4E /* FirebaseStorage in Frameworks */,
 				898B14FA2CFD5F5800EA200A /* FirebaseAnalyticsWithoutAdIdSupport in Frameworks */,
 				E50F7F497ADB5D36912A79C2 /* Pods_2024_MacC_M4_6princess.framework in Frameworks */,
@@ -101,7 +97,6 @@
 				D92C3138807A48981E8016E4 /* Pods-2024-MacC-M4-6princess.debug.xcconfig */,
 				8205675D2D229B65A7B194EF /* Pods-2024-MacC-M4-6princess.release.xcconfig */,
 			);
-			name = Pods;
 			path = Pods;
 			sourceTree = "<group>";
 		};
@@ -160,7 +155,6 @@
 			packageProductDependencies = (
 				898B14F72CFD5F5800EA200A /* FirebaseAnalytics */,
 				898B14F92CFD5F5800EA200A /* FirebaseAnalyticsWithoutAdIdSupport */,
-				898B159B2CFD8CCD00EA200A /* FirebaseAnalyticsOnDeviceConversion */,
 				89DC209E2D324E0D00C1BD4E /* FirebaseAppCheck */,
 				89DC20A02D324E2D00C1BD4E /* FirebaseStorage */,
 				89938ADC2D7EC5F800EAD63B /* GoogleMobileAds */,
@@ -295,9 +289,13 @@
 			inputFileListPaths = (
 				"${PODS_ROOT}/Target Support Files/Pods-2024-MacC-M4-6princess/Pods-2024-MacC-M4-6princess-frameworks-${CONFIGURATION}-input-files.xcfilelist",
 			);
+			inputPaths = (
+			);
 			name = "[CP] Embed Pods Frameworks";
 			outputFileListPaths = (
 				"${PODS_ROOT}/Target Support Files/Pods-2024-MacC-M4-6princess/Pods-2024-MacC-M4-6princess-frameworks-${CONFIGURATION}-output-files.xcfilelist",
+			);
+			outputPaths = (
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 			shellPath = /bin/sh;
@@ -334,9 +332,13 @@
 			inputFileListPaths = (
 				"${PODS_ROOT}/Target Support Files/Pods-2024-MacC-M4-6princess/Pods-2024-MacC-M4-6princess-resources-${CONFIGURATION}-input-files.xcfilelist",
 			);
+			inputPaths = (
+			);
 			name = "[CP] Copy Pods Resources";
 			outputFileListPaths = (
 				"${PODS_ROOT}/Target Support Files/Pods-2024-MacC-M4-6princess/Pods-2024-MacC-M4-6princess-resources-${CONFIGURATION}-output-files.xcfilelist",
+			);
+			outputPaths = (
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 			shellPath = /bin/sh;
@@ -436,7 +438,7 @@
 				DEBUG_INFORMATION_FORMAT = dwarf;
 				ENABLE_STRICT_OBJC_MSGSEND = YES;
 				ENABLE_TESTABILITY = YES;
-				ENABLE_USER_SCRIPT_SANDBOXING = YES;
+				ENABLE_USER_SCRIPT_SANDBOXING = NO;
 				GCC_C_LANGUAGE_STANDARD = gnu17;
 				GCC_DYNAMIC_NO_PIC = NO;
 				GCC_NO_COMMON_BLOCKS = YES;
@@ -500,7 +502,7 @@
 				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
 				ENABLE_NS_ASSERTIONS = NO;
 				ENABLE_STRICT_OBJC_MSGSEND = YES;
-				ENABLE_USER_SCRIPT_SANDBOXING = YES;
+				ENABLE_USER_SCRIPT_SANDBOXING = NO;
 				GCC_C_LANGUAGE_STANDARD = gnu17;
 				GCC_NO_COMMON_BLOCKS = YES;
 				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
@@ -530,7 +532,7 @@
 				CURRENT_PROJECT_VERSION = 202602229;
 				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
 				DEVELOPMENT_ASSET_PATHS = "\"2024-MacC-M4-6princess/Preview Content\"";
-				DEVELOPMENT_TEAM = KB52T46C6D;
+				DEVELOPMENT_TEAM = 557346W8SC;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = "-024-MacC-M4-6princess-Info.plist";
@@ -573,7 +575,7 @@
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 202602229;
 				DEVELOPMENT_ASSET_PATHS = "\"2024-MacC-M4-6princess/Preview Content\"";
-				DEVELOPMENT_TEAM = KB52T46C6D;
+				DEVELOPMENT_TEAM = 557346W8SC;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = "-024-MacC-M4-6princess-Info.plist";
@@ -772,11 +774,6 @@
 			isa = XCSwiftPackageProductDependency;
 			package = 898B14F62CFD5F5800EA200A /* XCRemoteSwiftPackageReference "firebase-ios-sdk" */;
 			productName = FirebaseAnalyticsWithoutAdIdSupport;
-		};
-		898B159B2CFD8CCD00EA200A /* FirebaseAnalyticsOnDeviceConversion */ = {
-			isa = XCSwiftPackageProductDependency;
-			package = 898B14F62CFD5F5800EA200A /* XCRemoteSwiftPackageReference "firebase-ios-sdk" */;
-			productName = FirebaseAnalyticsOnDeviceConversion;
 		};
 		89938ADC2D7EC5F800EAD63B /* GoogleMobileAds */ = {
 			isa = XCSwiftPackageProductDependency;
