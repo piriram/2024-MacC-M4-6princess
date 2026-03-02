@@ -11,6 +11,7 @@ import CoreData
 import FirebaseAnalytics
 import UIKit
 import Combine
+import os
 import SnapKit
 
 struct CameraView: View {
@@ -51,7 +52,7 @@ struct CameraView: View {
                     .ignoresSafeArea(.all, edges: .all)
             }
         }
-        .onChange(of: frameManager.isFrameLoading) { newValue in
+        .onChange(of: frameManager.isFrameLoading) { _, newValue in
             if newValue {
                 frameManager.isFrameLoading = false
             }
@@ -139,6 +140,31 @@ private struct CameraUIKitContainerView: UIViewControllerRepresentable {
             imageModel: imageModel,
             viewContext: viewContext
         )
+    }
+}
+
+private enum CameraLayoutDebugLog {
+    private static let forcedOnByArg = ProcessInfo.processInfo.arguments.contains("-cameraDebugLayout")
+    private static let forcedOnByLaunchArg = ProcessInfo.processInfo.environment["CAMERA_LAYOUT_LOG"] == "1"
+    static var isEnabled: Bool {
+#if DEBUG
+        return true
+#else
+        if let explicit = UserDefaults.standard.object(forKey: "debug.camera.layout.logging") as? NSNumber {
+            return explicit.boolValue
+        }
+        if forcedOnByArg || forcedOnByLaunchArg {
+            return true
+        }
+        return true
+#endif
+    }
+
+    static func log(_ message: @autoclosure () -> String) {
+        guard isEnabled else { return }
+        let log = Logger(subsystem: "2024-MacC-M4-6princess", category: "CameraLayout")
+        let content = message()
+        log.debug("\(content, privacy: .public)")
     }
 }
 
@@ -230,7 +256,6 @@ private final class CameraUIKitViewController: UIViewController {
 
     private var filterOverlayHostingController: UIHostingController<AnyView>?
 
-    private var previewWidthConstraint: Constraint?
     private var previewHeightConstraint: Constraint?
     private var previewTopConstraint: Constraint?
     private var bottomHeightConstraint: Constraint?
@@ -283,8 +308,7 @@ private final class CameraUIKitViewController: UIViewController {
         setupLayout()
         bindState()
 
-        updateLayoutForCurrentBounds()
-        updatePreviewContent()
+        // 첫 레이아웃은 viewDidLayoutSubviews에서 처리하여 초기 임시 frame 오차로 인한 오탐을 방지
         updateFilterOverlay()
         timerControlView.update(delayTime: viewModel.delayTime)
         rebuildZoomButtonsIfNeeded(force: true)
@@ -520,8 +544,7 @@ private final class CameraUIKitViewController: UIViewController {
 
         previewContainerView.snp.makeConstraints { make in
             previewTopConstraint = make.top.equalTo(topContainerView.snp.bottom).constraint
-            make.centerX.equalToSuperview()
-            previewWidthConstraint = make.width.equalTo(0).constraint
+            make.leading.trailing.equalToSuperview()
             previewHeightConstraint = make.height.equalTo(0).constraint
         }
     }
@@ -620,7 +643,6 @@ private final class CameraUIKitViewController: UIViewController {
         let needsTopTransparent = requiredHeight > bounds.height
         applyTopBarBackground(isTransparent: needsTopTransparent)
 
-        previewWidthConstraint?.update(offset: previewWidth)
         previewHeightConstraint?.update(offset: previewHeight)
         previewTopConstraint?.update(offset: previewTopOffset)
         bottomHeightConstraint?.update(offset: bottomHeight)
@@ -633,19 +655,20 @@ private final class CameraUIKitViewController: UIViewController {
         newFrameIconView.layer.shadowOpacity = effectiveTall ? 1 : 0
         newFrameLabel.isHidden = !effectiveTall
 
-        viewModel.frameSize.size = CGSize(width: previewWidth, height: previewHeight)
+        let newFrameSize = CGSize(width: previewWidth, height: previewHeight)
+        DispatchQueue.main.async { [weak self] in
+            self?.viewModel.frameSize.size = newFrameSize
+        }
         previewContainerView.layoutIfNeeded()
         viewModel.preview?.frame = previewContainerView.bounds
 
         updateIconRotation(for: motionManager.currentOrientation)
 
-        #if DEBUG
-        print("[CameraLayout] bounds=(\(bounds.width),\(bounds.height)) isTall=\(isTallScreen) ratio=\(String(format: "%.4f", ratio))")
-        print("[CameraLayout] topH=\(topContainerView.frame.height) bottomH=\(bottomContainerView.frame.height) zoomBottom=\(zoomContainerView.frame.maxY) bottomTop=\(bottomContainerView.frame.minY)")
-        print("[CameraLayout] previewTopOffset=\(previewTopConstraint?.layoutConstraint?.constant ?? 0) overlapTopBar=\(allowTopOverlap)")
-        print("[CameraLayout] preview=(\(previewContainerView.frame.origin.x),\(previewContainerView.frame.origin.y),\(previewContainerView.frame.size.width),\(previewContainerView.frame.size.height))")
-        print("[CameraLayout] frameSize=(\(viewModel.frameSize.size.width),\(viewModel.frameSize.size.height))")
-        #endif
+        CameraLayoutDebugLog.log("[CameraLayout] bounds=(\(bounds.width),\(bounds.height)) isTall=\(isTallScreen) ratio=\(String(format: "%.4f", ratio))")
+        CameraLayoutDebugLog.log("[CameraLayout] topH=\(topContainerView.frame.height) bottomH=\(bottomContainerView.frame.height) zoomBottom=\(zoomContainerView.frame.maxY) bottomTop=\(bottomContainerView.frame.minY)")
+        CameraLayoutDebugLog.log("[CameraLayout] previewTopOffset=\(previewTopOffset) overlapTopBar=\(allowTopOverlap)")
+        CameraLayoutDebugLog.log("[CameraLayout] preview=(\(previewContainerView.frame.origin.x),\(previewContainerView.frame.origin.y),\(previewContainerView.frame.size.width),\(previewContainerView.frame.size.height))")
+        CameraLayoutDebugLog.log("[CameraLayout] frameSize=(\(viewModel.frameSize.size.width),\(viewModel.frameSize.size.height))")
     }
 
     private func updatePreviewContent() {
@@ -663,10 +686,17 @@ private final class CameraUIKitViewController: UIViewController {
             viewModel.preview.videoGravity = CameraDisplayPolicyStore.current.previewMode.videoGravity
         }
 
+        // 미리보기는 가로 채움 우선
+        viewModel.preview?.videoGravity = .resizeAspectFill
+
         guard let previewLayer = viewModel.preview else { return }
 
+        CameraLayoutDebugLog.log("[CameraPreview] sessionId=\(ObjectIdentifier(previewLayer).hashValue), isSample=\(viewModel.isUsingSampleCamera)")
+
         previewContainerView.layoutIfNeeded()
+
         let previewBounds = previewContainerView.bounds
+        CameraLayoutDebugLog.log("[CameraLayout] updatePreviewContent: frame=(\(previewContainerView.frame.origin.x),\(previewContainerView.frame.origin.y),\(previewContainerView.frame.size.width),\(previewContainerView.frame.size.height))")
         guard previewBounds.width > 1, previewBounds.height > 1 else { return }
 
         if previewLayer.superlayer !== previewContainerView.layer {
@@ -1131,14 +1161,11 @@ private final class CameraTimerControlView: UIControl {
         backgroundCapsuleView.addSubview(expandedStackView)
 
         collapsedStackView.snp.makeConstraints { make in
-            make.leading.greaterThanOrEqualToSuperview().offset(5)
-            make.trailing.lessThanOrEqualToSuperview().offset(-5)
             make.center.equalToSuperview()
         }
 
         expandedStackView.snp.makeConstraints { make in
-            make.leading.greaterThanOrEqualToSuperview().offset(5)
-            make.trailing.lessThanOrEqualToSuperview().offset(-5)
+            make.centerX.equalToSuperview()
             make.centerY.equalToSuperview()
         }
 

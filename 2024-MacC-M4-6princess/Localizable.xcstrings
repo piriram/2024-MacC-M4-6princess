@@ -227,6 +227,9 @@
     "Apply" : {
 
     },
+    "Camera Preview" : {
+
+    },
     "Camera Source" : {
 
     },
@@ -435,6 +438,9 @@
           }
         }
       }
+    },
+    "Overlap Top Bar: preview starts from y=0 and can cover top area" : {
+
     },
     "stickerTab.bubble" : {
       "extractionState" : "manual",
@@ -684,6 +690,9 @@
       }
     },
     "Title" : {
+
+    },
+    "Top Bar Placement" : {
 
     },
     "가져오기 품질" : {

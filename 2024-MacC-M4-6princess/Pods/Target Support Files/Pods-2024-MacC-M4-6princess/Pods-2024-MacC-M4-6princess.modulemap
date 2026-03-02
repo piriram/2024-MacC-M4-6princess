@@ -1,6 +1,0 @@
-framework module Pods_2024_MacC_M4_6princess {
-  umbrella header "Pods-2024-MacC-M4-6princess-umbrella.h"
-
-  export *
-  module * { export * }
-}
