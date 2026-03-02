@@ -16,6 +16,8 @@
 		89DC209F2D324E0D00C1BD4E /* FirebaseAppCheck in Frameworks */ = {isa = PBXBuildFile; productRef = 89DC209E2D324E0D00C1BD4E /* FirebaseAppCheck */; };
 		89DC20A12D324E2D00C1BD4E /* FirebaseStorage in Frameworks */ = {isa = PBXBuildFile; productRef = 89DC20A02D324E2D00C1BD4E /* FirebaseStorage */; };
 		E50F7F497ADB5D36912A79C2 /* Pods_2024_MacC_M4_6princess.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 853BFE19E4232F2577F88DC9 /* Pods_2024_MacC_M4_6princess.framework */; };
+		A2A4B9BC8D1F4A6F0D5EE456 /* SmokeLaunchUITests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9F5A4D2A2C5F4C4F00A9B123 /* SmokeLaunchUITests.swift */; };
+
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -48,12 +50,15 @@
 		89A94AAF2CA9B64C00824592 /* 2024-MacC-M4-6princess.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = "2024-MacC-M4-6princess.app"; sourceTree = BUILT_PRODUCTS_DIR; };
 		89A94ABF2CA9B66300824592 /* 2024-MacC-M4-6princessTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = "2024-MacC-M4-6princessTests.xctest"; sourceTree = BUILT_PRODUCTS_DIR; };
 		89A94AC92CA9B66300824592 /* 2024-MacC-M4-6princessUITests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = "2024-MacC-M4-6princessUITests.xctest"; sourceTree = BUILT_PRODUCTS_DIR; };
+		9F5A4D2A2C5F4C4F00A9B123 /* SmokeLaunchUITests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "2024-MacC-M4-6princessUITests/SmokeLaunchUITests.swift"; sourceTree = "<project>"; };
 		D92C3138807A48981E8016E4 /* Pods-2024-MacC-M4-6princess.debug.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-2024-MacC-M4-6princess.debug.xcconfig"; path = "Target Support Files/Pods-2024-MacC-M4-6princess/Pods-2024-MacC-M4-6princess.debug.xcconfig"; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedRootGroup section */
 		89A94AB12CA9B64C00824592 /* 2024-MacC-M4-6princess */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
+			exceptions = (
+			);
 			path = "2024-MacC-M4-6princess";
 			sourceTree = "<group>";
 		};
@@ -289,13 +294,9 @@
 			inputFileListPaths = (
 				"${PODS_ROOT}/Target Support Files/Pods-2024-MacC-M4-6princess/Pods-2024-MacC-M4-6princess-frameworks-${CONFIGURATION}-input-files.xcfilelist",
 			);
-			inputPaths = (
-			);
 			name = "[CP] Embed Pods Frameworks";
 			outputFileListPaths = (
 				"${PODS_ROOT}/Target Support Files/Pods-2024-MacC-M4-6princess/Pods-2024-MacC-M4-6princess-frameworks-${CONFIGURATION}-output-files.xcfilelist",
-			);
-			outputPaths = (
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 			shellPath = /bin/sh;
@@ -332,13 +333,9 @@
 			inputFileListPaths = (
 				"${PODS_ROOT}/Target Support Files/Pods-2024-MacC-M4-6princess/Pods-2024-MacC-M4-6princess-resources-${CONFIGURATION}-input-files.xcfilelist",
 			);
-			inputPaths = (
-			);
 			name = "[CP] Copy Pods Resources";
 			outputFileListPaths = (
 				"${PODS_ROOT}/Target Support Files/Pods-2024-MacC-M4-6princess/Pods-2024-MacC-M4-6princess-resources-${CONFIGURATION}-output-files.xcfilelist",
-			);
-			outputPaths = (
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 			shellPath = /bin/sh;
@@ -366,6 +363,7 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				A2A4B9BC8D1F4A6F0D5EE456 /* SmokeLaunchUITests.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -529,7 +527,7 @@
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 202602229;
+				CURRENT_PROJECT_VERSION = 2603011615;
 				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
 				DEVELOPMENT_ASSET_PATHS = "\"2024-MacC-M4-6princess/Preview Content\"";
 				DEVELOPMENT_TEAM = 557346W8SC;
@@ -553,7 +551,7 @@
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				MARKETING_VERSION = 2.2.2;
+				MARKETING_VERSION = 2.2.3;
 				PRODUCT_BUNDLE_IDENTIFIER = sixPrincess.release.com;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
@@ -573,7 +571,7 @@
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 202602229;
+				CURRENT_PROJECT_VERSION = 2603011615;
 				DEVELOPMENT_ASSET_PATHS = "\"2024-MacC-M4-6princess/Preview Content\"";
 				DEVELOPMENT_TEAM = 557346W8SC;
 				ENABLE_PREVIEWS = YES;
@@ -596,7 +594,7 @@
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				MARKETING_VERSION = 2.2.2;
+				MARKETING_VERSION = 2.2.3;
 				PRODUCT_BUNDLE_IDENTIFIER = sixPrincess.release.com;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
@@ -614,7 +612,7 @@
 			buildSettings = {
 				BUNDLE_LOADER = "$(TEST_HOST)";
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 1;
+				CURRENT_PROJECT_VERSION = 2603011615;
 				DEVELOPMENT_TEAM = KB52T46C6D;
 				GENERATE_INFOPLIST_FILE = YES;
 				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
@@ -637,7 +635,7 @@
 			buildSettings = {
 				BUNDLE_LOADER = "$(TEST_HOST)";
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 1;
+				CURRENT_PROJECT_VERSION = 2603011615;
 				DEVELOPMENT_TEAM = KB52T46C6D;
 				GENERATE_INFOPLIST_FILE = YES;
 				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
@@ -659,7 +657,7 @@
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 1;
+				CURRENT_PROJECT_VERSION = 2603011615;
 				DEVELOPMENT_TEAM = KB52T46C6D;
 				GENERATE_INFOPLIST_FILE = YES;
 				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
@@ -681,7 +679,7 @@
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 1;
+				CURRENT_PROJECT_VERSION = 2603011615;
 				DEVELOPMENT_TEAM = KB52T46C6D;
 				GENERATE_INFOPLIST_FILE = YES;
 				IPHONEOS_DEPLOYMENT_TARGET = 17.0;

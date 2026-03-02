@@ -33,6 +33,22 @@ enum CutoutEngineOption: String, CaseIterable, Identifiable {
     }
 }
 
+enum PreviewTopPlacementOption: String, CaseIterable, Identifiable {
+    case respectTopBar
+    case overlapTopBar
+
+    var id: String { rawValue }
+
+    var displayName: String {
+        switch self {
+        case .respectTopBar:
+            return "Respect Top Bar"
+        case .overlapTopBar:
+            return "Overlap Top Bar"
+        }
+    }
+}
+
 enum RuntimeSelectionResolver {
     static func defaultCameraSource(isSimulator: Bool) -> CameraSourceOption {
         isSimulator ? .sample : .device
@@ -55,6 +71,7 @@ enum RuntimeSelectionResolver {
 enum RuntimeTestingOptions {
     private static let cameraSourceKey = "debug.camera.source"
     private static let cutoutEngineKey = "debug.cutout.engine"
+    private static let previewTopPlacementKey = "debug.camera.preview.topPlacement"
 
     static var isSimulator: Bool {
         #if targetEnvironment(simulator)
@@ -104,5 +121,20 @@ enum RuntimeTestingOptions {
 
     static func setCutoutEngine(_ value: CutoutEngineOption, userDefaults: UserDefaults = .standard) {
         userDefaults.set(value.rawValue, forKey: cutoutEngineKey)
+    }
+
+    static func previewTopPlacement(userDefaults: UserDefaults = .standard) -> PreviewTopPlacementOption {
+        #if DEBUG
+        if let raw = userDefaults.string(forKey: previewTopPlacementKey),
+           let stored = PreviewTopPlacementOption(rawValue: raw) {
+            return stored
+        }
+        #endif
+
+        return .respectTopBar
+    }
+
+    static func setPreviewTopPlacement(_ value: PreviewTopPlacementOption, userDefaults: UserDefaults = .standard) {
+        userDefaults.set(value.rawValue, forKey: previewTopPlacementKey)
     }
 }

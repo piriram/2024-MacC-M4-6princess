@@ -5,6 +5,7 @@ struct CameraDebugOptionsView: View {
 
     @State private var cameraSource: CameraSourceOption = RuntimeTestingOptions.cameraSource()
     @State private var cutoutEngine: CutoutEngineOption = RuntimeTestingOptions.cutoutEngine()
+    @State private var previewTopPlacement: PreviewTopPlacementOption = RuntimeTestingOptions.previewTopPlacement()
 
     let onApply: () -> Void
 
@@ -28,6 +29,18 @@ struct CameraDebugOptionsView: View {
                     }
                     .pickerStyle(.segmented)
                 }
+
+                Section("Camera Preview") {
+                    Picker("Top Bar Placement", selection: $previewTopPlacement) {
+                        ForEach(PreviewTopPlacementOption.allCases) { option in
+                            Text(option.displayName).tag(option)
+                        }
+                    }
+                    .pickerStyle(.segmented)
+                    Text("Overlap Top Bar: preview starts from y=0 and can cover top area")
+                        .font(.footnote)
+                        .foregroundStyle(.secondary)
+                }
             }
             .navigationTitle("Debug Testing")
             .toolbar {
@@ -39,6 +52,7 @@ struct CameraDebugOptionsView: View {
                     Button("Apply") {
                         RuntimeTestingOptions.setCameraSource(cameraSource)
                         RuntimeTestingOptions.setCutoutEngine(cutoutEngine)
+                        RuntimeTestingOptions.setPreviewTopPlacement(previewTopPlacement)
                         onApply()
                         dismiss()
                     }

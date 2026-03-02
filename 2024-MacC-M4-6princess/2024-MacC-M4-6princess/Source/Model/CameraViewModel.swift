@@ -62,7 +62,7 @@ class CameraViewModel: NSObject, ObservableObject {
     @Published private(set) var samplePreviewImage: UIImage?
 
     // 프레임 관련 상태
-    @Published var frameRatio: CGFloat = 4/3
+    @Published private(set) var frameRatio: CGFloat = CameraDisplayPolicyStore.current.aspect.spec.ratio
 
     // 타이머 관련 상태
     @Published var delayTime: TimeInterval = 0.0
@@ -105,6 +105,7 @@ class CameraViewModel: NSObject, ObservableObject {
         self.defaultImg = UIImage(named: "whiteBG") ?? UIImage()
         super.init()
         setupPreviewLayer()
+        syncDisplayPolicy()
         syncProviderState()
         _ = motionManager
     }
@@ -115,7 +116,13 @@ class CameraViewModel: NSObject, ObservableObject {
 
     private func setupPreviewLayer() {
         preview = AVCaptureVideoPreviewLayer(session: cameraProvider.session)
-        preview.videoGravity = .resizeAspectFill
+        preview.videoGravity = CameraDisplayPolicyStore.current.previewMode.videoGravity
+    }
+
+    private func syncDisplayPolicy() {
+        let policy = CameraDisplayPolicyStore.current
+        frameRatio = policy.aspectSpec.ratio
+        preview.videoGravity = policy.previewMode.videoGravity
     }
 
     func handleCapturedPhoto(_ frame: CameraCaptureFrame) {
@@ -179,12 +186,11 @@ class CameraViewModel: NSObject, ObservableObject {
         // 이미지의 방향을 .up으로 수정. 이미지 프리뷰를 위함
         capturedImage = fixOrientation(capturedImage)
 
-        let croppedImage = cropToAspectRatio(image: capturedImage)
-        guard let croppedCGImage = croppedImage.cgImage else {
+        guard let processedImage = applyOutputPolicy(to: capturedImage).cgImage else {
             throw CapturePipelineError.cropFailed
         }
 
-        return UIImage(cgImage: croppedCGImage, scale: croppedImage.scale, orientation: croppedImage.imageOrientation)
+        return UIImage(cgImage: processedImage, scale: capturedImage.scale, orientation: capturedImage.imageOrientation)
     }
 
     private func handleCaptureError(_ error: Error, showAlert: Bool = true) {
@@ -215,30 +221,42 @@ class CameraViewModel: NSObject, ObservableObject {
         }
     }
 
-    //이미지를 비율에 맞게 크롭
-    func cropToAspectRatio(image: UIImage) -> UIImage  {
+    // 캡처 결과를 정책에 맞춰 출력 처리
+    private func applyOutputPolicy(to image: UIImage) -> UIImage {
+        let policy = CameraDisplayPolicyStore.current
+
+        switch policy.outputMode {
+        case .passThrough:
+            return image
+        case .cropCenter:
+            return cropToAspectRatio(image: image, targetRatio: policy.aspectSpec.ratio)
+        }
+    }
+
+    // 이미지를 비율에 맞게 중앙 크롭
+    private func cropToAspectRatio(image: UIImage, targetRatio: CGFloat) -> UIImage {
         guard let cgImage = image.cgImage else {
             return image
         }
-        let width = CGFloat(cgImage.width)
-        let height = CGFloat(cgImage.height)
-        guard width > 0 && frameRatio > 0 else { return image }
 
-        let targetHeight = width * frameRatio
-        guard targetHeight > 0 else { return image }
+        let sourceWidth = CGFloat(cgImage.width)
+        let sourceHeight = CGFloat(cgImage.height)
+        guard sourceWidth > 0 && sourceHeight > 0 && targetRatio > 0 else { return image }
 
-        // 자르기 시작 위치를 안전하게 보정
-        let estimatedY = (height - targetHeight) / 2 - 3
-        let clampedY = max(0, min(estimatedY, max(0, height - targetHeight)))
-        let clampedHeight = min(targetHeight, max(0, height - clampedY))
-        guard clampedHeight > 0 else { return image }
-
-        let cropRect: CGRect = CGRect(x: 0, y: clampedY, width: width, height: clampedHeight)
-
-        guard let croppedImage = image.cgImage?.cropping(to: cropRect) else {
-            return image
+        let targetHeight = sourceWidth * targetRatio
+        if sourceHeight >= targetHeight {
+            let cropHeight = targetHeight
+            let topOffset = max(0, (sourceHeight - cropHeight) / 2)
+            let cropRect = CGRect(x: 0, y: topOffset, width: sourceWidth, height: min(cropHeight, sourceHeight - topOffset))
+            guard let cropped = image.cgImage?.cropping(to: cropRect) else {
+                return image
+            }
+            return UIImage(cgImage: cropped, scale: image.scale, orientation: image.imageOrientation)
         }
-        return UIImage(cgImage: croppedImage, scale: image.scale, orientation: image.imageOrientation)
+
+        // 세로가 짧아 크롭이 불가능한 경우는 가운데 기준 패딩 없이, 원본을 그대로 유지
+        // (현재 카메라 입력 기준으로는 crop 실패 케이스가 드묾)
+        return image
     }
 
     //셔터가 눌리면 실행되는 함수
@@ -373,6 +391,7 @@ class CameraViewModel: NSObject, ObservableObject {
         cameraProvider = CameraProviderFactory.makeDefault()
         syncProviderState()
         setupPreviewLayer()
+        syncDisplayPolicy()
     }
 
     private func syncProviderState() {

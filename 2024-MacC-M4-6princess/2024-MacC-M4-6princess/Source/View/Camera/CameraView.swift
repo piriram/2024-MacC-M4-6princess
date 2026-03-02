@@ -219,6 +219,7 @@ private final class CameraUIKitViewController: UIViewController {
     private let zoomStackView = UIStackView()
 
     private let bottomOverlayView = UIView()
+    private let topContainerHeight: CGFloat = 46
     private let newFrameButton = UIButton(type: .custom)
     private let newFrameIconView = UIImageView()
     private let newFrameLabel = UILabel()
@@ -231,6 +232,7 @@ private final class CameraUIKitViewController: UIViewController {
 
     private var previewWidthConstraint: Constraint?
     private var previewHeightConstraint: Constraint?
+    private var previewTopConstraint: Constraint?
     private var bottomHeightConstraint: Constraint?
     private var bottomOverlayTopInsetConstraint: Constraint?
 
@@ -349,6 +351,16 @@ private final class CameraUIKitViewController: UIViewController {
         view.addSubview(topContainerView)
         view.addSubview(zoomContainerView)
         view.addSubview(bottomContainerView)
+
+        previewContainerView.accessibilityIdentifier = "camera.preview"
+        topContainerView.accessibilityIdentifier = "camera.top"
+        zoomContainerView.accessibilityIdentifier = "camera.zoom"
+        bottomContainerView.accessibilityIdentifier = "camera.bottom"
+
+        previewContainerView.isAccessibilityElement = true
+        topContainerView.isAccessibilityElement = true
+        zoomContainerView.isAccessibilityElement = true
+        bottomContainerView.isAccessibilityElement = true
 
         sampleImageView.snp.makeConstraints { make in
             make.edges.equalToSuperview()
@@ -493,7 +505,7 @@ private final class CameraUIKitViewController: UIViewController {
     private func setupLayout() {
         topContainerView.snp.makeConstraints { make in
             make.top.leading.trailing.equalToSuperview()
-            make.height.equalTo(46)
+            make.height.equalTo(topContainerHeight)
         }
 
         bottomContainerView.snp.makeConstraints { make in
@@ -507,7 +519,7 @@ private final class CameraUIKitViewController: UIViewController {
         }
 
         previewContainerView.snp.makeConstraints { make in
-            make.top.equalTo(topContainerView.snp.bottom)
+            previewTopConstraint = make.top.equalTo(topContainerView.snp.bottom).constraint
             make.centerX.equalToSuperview()
             previewWidthConstraint = make.width.equalTo(0).constraint
             previewHeightConstraint = make.height.equalTo(0).constraint
@@ -591,34 +603,49 @@ private final class CameraUIKitViewController: UIViewController {
         let isTallScreen = bounds.height / bounds.width > 2.0
         isTallScreenLayout = isTallScreen
 
-        let previewWidth: CGFloat = bounds.width
-        let previewHeight: CGFloat
+        // [iPhone 기준] SnapKit 레이아웃 정합 규칙
+        // 1) top: 46pt
+        // 2) preview: 화면폭 전체, 높이 = width * ratio
+        // 3) bottom: tall(>2.0) 111pt, short 60pt
+        // 4) zoom: bottom top - 20pt
+        let isPhone = UIDevice.current.userInterfaceIdiom == .phone
+        let effectiveTall = isPhone ? isTallScreen : isTallScreen
 
-        if isTallScreen {
-            previewHeight = previewWidth * ratio
-        } else {
-            let maxPreviewHeight = max(bounds.height - 200, 0)
-            previewHeight = min(previewWidth * ratio, maxPreviewHeight)
-        }
+        let previewWidth: CGFloat = bounds.width
+        let previewHeight: CGFloat = previewWidth * ratio
+        let bottomHeight: CGFloat = effectiveTall ? 111 : 60
+        let allowTopOverlap: Bool = RuntimeTestingOptions.previewTopPlacement() == .overlapTopBar
+        let previewTopOffset: CGFloat = allowTopOverlap ? -topContainerHeight : 0
+        let requiredHeight = previewHeight + bottomHeight + (allowTopOverlap ? 0 : topContainerHeight)
+        let needsTopTransparent = requiredHeight > bounds.height
+        applyTopBarBackground(isTransparent: needsTopTransparent)
 
         previewWidthConstraint?.update(offset: previewWidth)
         previewHeightConstraint?.update(offset: previewHeight)
-        bottomHeightConstraint?.update(offset: isTallScreen ? 111 : 60)
+        previewTopConstraint?.update(offset: previewTopOffset)
+        bottomHeightConstraint?.update(offset: bottomHeight)
+        bottomOverlayTopInsetConstraint?.update(offset: effectiveTall ? 20 : 0)
 
-        bottomOverlayTopInsetConstraint?.update(offset: isTallScreen ? 20 : 0)
-
-        newFrameButtonWidthConstraint?.update(offset: isTallScreen ? 70 : 56)
-        newFrameButtonHeightConstraint?.update(offset: isTallScreen ? 80 : 56)
-        newFrameIconWidthConstraint?.update(offset: isTallScreen ? 50 : 40)
-        newFrameIconHeightConstraint?.update(offset: isTallScreen ? 50 : 40)
-        newFrameIconView.layer.shadowOpacity = isTallScreen ? 1 : 0
-        newFrameLabel.isHidden = !isTallScreen
+        newFrameButtonWidthConstraint?.update(offset: effectiveTall ? 70 : 56)
+        newFrameButtonHeightConstraint?.update(offset: effectiveTall ? 80 : 56)
+        newFrameIconWidthConstraint?.update(offset: effectiveTall ? 50 : 40)
+        newFrameIconHeightConstraint?.update(offset: effectiveTall ? 50 : 40)
+        newFrameIconView.layer.shadowOpacity = effectiveTall ? 1 : 0
+        newFrameLabel.isHidden = !effectiveTall
 
         viewModel.frameSize.size = CGSize(width: previewWidth, height: previewHeight)
         previewContainerView.layoutIfNeeded()
         viewModel.preview?.frame = previewContainerView.bounds
 
         updateIconRotation(for: motionManager.currentOrientation)
+
+        #if DEBUG
+        print("[CameraLayout] bounds=(\(bounds.width),\(bounds.height)) isTall=\(isTallScreen) ratio=\(String(format: "%.4f", ratio))")
+        print("[CameraLayout] topH=\(topContainerView.frame.height) bottomH=\(bottomContainerView.frame.height) zoomBottom=\(zoomContainerView.frame.maxY) bottomTop=\(bottomContainerView.frame.minY)")
+        print("[CameraLayout] previewTopOffset=\(previewTopConstraint?.layoutConstraint?.constant ?? 0) overlapTopBar=\(allowTopOverlap)")
+        print("[CameraLayout] preview=(\(previewContainerView.frame.origin.x),\(previewContainerView.frame.origin.y),\(previewContainerView.frame.size.width),\(previewContainerView.frame.size.height))")
+        print("[CameraLayout] frameSize=(\(viewModel.frameSize.size.width),\(viewModel.frameSize.size.height))")
+        #endif
     }
 
     private func updatePreviewContent() {
@@ -633,7 +660,7 @@ private final class CameraUIKitViewController: UIViewController {
 
         if viewModel.preview == nil || viewModel.preview.session !== viewModel.previewSession {
             viewModel.preview = AVCaptureVideoPreviewLayer(session: viewModel.previewSession)
-            viewModel.preview.videoGravity = .resizeAspectFill
+            viewModel.preview.videoGravity = CameraDisplayPolicyStore.current.previewMode.videoGravity
         }
 
         guard let previewLayer = viewModel.preview else { return }
@@ -647,6 +674,11 @@ private final class CameraUIKitViewController: UIViewController {
             previewContainerView.layer.insertSublayer(previewLayer, at: 0)
         }
         previewLayer.frame = previewBounds
+    }
+
+
+    private func applyTopBarBackground(isTransparent: Bool) {
+        topContainerView.backgroundColor = isTransparent ? UIColor.clear : UIColor.white
     }
 
     private func updateFilterOverlay() {
@@ -934,6 +966,7 @@ private final class CameraUIKitViewController: UIViewController {
             self.viewModel.startCameraSession()
             self.rebuildZoomButtonsIfNeeded(force: true)
             self.updateZoomButtonsAppearance(animated: false)
+            self.updateLayoutForCurrentBounds()
             self.updatePreviewContent()
         }
 

@@ -42,6 +42,11 @@
 5. 빠른 왕복 네비게이션(카메라↔편집↔결과)
 6. 저조도/연속 촬영 안정성
 7. 백그라운드 전환 후 복귀
+8. **카메라 미리보기 위치 회귀 체크**: `CameraView_Layout_Before_After_SnapKit.md`의 P0~P2 체크리스트 준수
+   - 높이/폭/간격 수치 확인
+   - top/preview/bottom/zoom 좌표 추적
+   - tall/short 분기 검증
+
 
 ## 4) 릴리스 게이트
 - 치명적 크래시 0건
@@ -53,3 +58,25 @@
 - 카메라 하드웨어 의존 영역은 실기기 수동 검증 필수
 - 로직/상태/영속성은 최대 자동화
 - PR마다: 단위 테스트 + 빌드 + 수동 스모크 결과 첨부
+
+## 2026-03-02 런타임 정책 업데이트
+
+### 카메라 레이아웃 정책(즉시 합의)
+- **아이폰 우선 정책:** 가로는 항상 화면 전체(`bounds.width`)를 사용.
+- 작은 폰(높이/폭이 상대적으로 작은 iPhone)에서 공간이 부족할 때는 위/아래 침범 허용이 필요한 것으로 판단.
+- 상단 침범 정책은 현재 디버그 옵션 기반으로 제어:
+  - `Respect Top Bar`(기본): `preview.top = top.bottom`
+  - `Overlap Top Bar`: `preview.top = top.bottom - 46`
+- 기기별 자동 정책은 아직 미정의 단계였으나, 향후 다음 액션으로 `smallPhone` 자동 판별 및 bottom 높이 동적 축소 적용을 고려.
+
+### 지금까지 반영한 실행 단서
+- 런타임 설정 확장
+  - `RuntimeTestingOptions`에 `debug.camera.preview.topPlacement` 키 추가
+  - `PreviewTopPlacementOption` (`respectTopBar`, `overlapTopBar`) 추가
+  - `CameraDebugOptionsView`에 UI Picker(`Camera Preview > Top Bar Placement`) 추가
+  - `CameraView.updateLayoutForCurrentBounds()`에서 top 오프셋 전환 반영
+- `testCameraLayoutParity_PreSnapKitRefactor`는 iPhone 기준 통과(짧은/긴 분기 포함)된 바 있으며, iPad 안정성은 추가 보정 필요 상태.
+
+### 문서 반영 계획(다음)
+- `CameraView_Layout_Before_After_SnapKit.md`에 "작은 폰 가용 높이 기반 클램프" 항목과 smallPhone 우선 전략을 체크리스트로 추가
+- 운영 규칙: 위 배치 변화는 `Refactor Regression Test Plan`의 회귀 체크포인트(P0~P2)에 반영 후 배포.
