@@ -1,5 +1,6 @@
 import Foundation
 import UIKit
+import ImageIO
 
 enum CameraSourceOption: String, CaseIterable, Identifiable {
     case device
@@ -49,6 +50,22 @@ enum PreviewTopPlacementOption: String, CaseIterable, Identifiable {
     }
 }
 
+enum ShutterVerticalPlacementOption: String, CaseIterable, Identifiable {
+    case topOverflow
+    case centerY
+
+    var id: String { rawValue }
+
+    var displayName: String {
+        switch self {
+        case .topOverflow:
+            return "Top Overflow"
+        case .centerY:
+            return "Center Y"
+        }
+    }
+}
+
 enum RuntimeSelectionResolver {
     static func defaultCameraSource(isSimulator: Bool) -> CameraSourceOption {
         isSimulator ? .sample : .device
@@ -72,6 +89,8 @@ enum RuntimeTestingOptions {
     private static let cameraSourceKey = "debug.camera.source"
     private static let cutoutEngineKey = "debug.cutout.engine"
     private static let previewTopPlacementKey = "debug.camera.preview.topPlacement"
+    private static let shutterVerticalPlacementKey = "debug.camera.shutter.verticalPlacement"
+    private static let hitTestLoggingEnabledKey = "debug.camera.hitTest.logging.enabled"
 
     static var isSimulator: Bool {
         #if targetEnvironment(simulator)
@@ -136,5 +155,57 @@ enum RuntimeTestingOptions {
 
     static func setPreviewTopPlacement(_ value: PreviewTopPlacementOption, userDefaults: UserDefaults = .standard) {
         userDefaults.set(value.rawValue, forKey: previewTopPlacementKey)
+    }
+
+    static func shutterVerticalPlacement(userDefaults: UserDefaults = .standard) -> ShutterVerticalPlacementOption {
+        #if DEBUG
+        if let raw = userDefaults.string(forKey: shutterVerticalPlacementKey),
+           let stored = ShutterVerticalPlacementOption(rawValue: raw) {
+            return stored
+        }
+        #endif
+
+        return .centerY
+    }
+
+    static func setShutterVerticalPlacement(_ value: ShutterVerticalPlacementOption, userDefaults: UserDefaults = .standard) {
+        userDefaults.set(value.rawValue, forKey: shutterVerticalPlacementKey)
+    }
+
+    static func isHitTestLoggingEnabled(userDefaults: UserDefaults = .standard) -> Bool {
+        #if DEBUG
+        if userDefaults.object(forKey: hitTestLoggingEnabledKey) != nil {
+            return userDefaults.bool(forKey: hitTestLoggingEnabledKey)
+        }
+        #endif
+
+        return false
+    }
+
+    static func setHitTestLoggingEnabled(_ isEnabled: Bool, userDefaults: UserDefaults = .standard) {
+        userDefaults.set(isEnabled, forKey: hitTestLoggingEnabledKey)
+    }
+}
+
+enum SafeImageDecoder {
+    static func decodeImage(from data: Data) -> UIImage? {
+        let sourceOptions: [CFString: Any] = [
+            kCGImageSourceShouldCache: false
+        ]
+
+        guard let source = CGImageSourceCreateWithData(data as CFData, sourceOptions as CFDictionary) else {
+            return UIImage(data: data)
+        }
+
+        let decodeOptions: [CFString: Any] = [
+            kCGImageSourceShouldCache: true,
+            kCGImageSourceShouldCacheImmediately: true
+        ]
+
+        guard let cgImage = CGImageSourceCreateImageAtIndex(source, 0, decodeOptions as CFDictionary) else {
+            return UIImage(data: data)
+        }
+
+        return UIImage(cgImage: cgImage)
     }
 }

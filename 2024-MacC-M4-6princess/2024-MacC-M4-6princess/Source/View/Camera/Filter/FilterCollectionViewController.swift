@@ -17,6 +17,7 @@ class FilterCollectionViewController: UIViewController, UICollectionViewDelegate
     var filterImages: [StoreImages]
     private var selectedFilter: ((UUID?) -> Void)?
     private var shutterButton: UIButton!
+    private var shutterCenterYConstraint: NSLayoutConstraint?
     private let imageCache = FilterImageCache.shared
     
     var currentSelectedFilter: UUID? {
@@ -121,12 +122,24 @@ class FilterCollectionViewController: UIViewController, UICollectionViewDelegate
         shutterButton.addTarget(self, action: #selector(shutterButtonTapped), for: .touchUpInside)
         
         view.addSubview(shutterButton)
-        NSLayoutConstraint.activate([
-            shutterButton.centerXAnchor.constraint(equalTo: view.centerXAnchor),
-            shutterButton.centerYAnchor.constraint(equalTo: collectionView.centerYAnchor)
-        ])
+        shutterCenterYConstraint = shutterButton.centerYAnchor.constraint(equalTo: collectionView.centerYAnchor)
+
+        var constraints: [NSLayoutConstraint] = [
+            shutterButton.centerXAnchor.constraint(equalTo: view.centerXAnchor)
+        ]
+
+        if let shutterCenterYConstraint {
+            constraints.append(shutterCenterYConstraint)
+        }
+
+        NSLayoutConstraint.activate(constraints)
         
         view.bringSubviewToFront(shutterButton)
+    }
+
+    func setShutterVerticalOffset(_ offset: CGFloat) {
+        shutterCenterYConstraint?.constant = offset
+        view.layoutIfNeeded()
     }
     
     

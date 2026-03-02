@@ -37,7 +37,7 @@ class HomeViewModel: ObservableObject {
     func loadImageData(for id: UUID) -> Data? {
         do {
             guard let imageData = try storeImageService.fetchImageData(for: id),
-                  let image = UIImage(data: imageData),
+                  let image = SafeImageDecoder.decodeImage(from: imageData),
                   let downsampled = downsampleImage(
                     image,
                     to: CGSize(

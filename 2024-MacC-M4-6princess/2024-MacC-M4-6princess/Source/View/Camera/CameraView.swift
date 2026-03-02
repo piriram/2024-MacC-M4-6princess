@@ -168,7 +168,7 @@ private enum CameraLayoutDebugLog {
     }
 }
 
-private final class CameraUIKitViewController: UIViewController {
+private final class CameraUIKitViewController: UIViewController, UIGestureRecognizerDelegate {
     private enum ZoomOption: Double {
         case ultraWide = 1.0
         case wide = 2.0
@@ -246,6 +246,10 @@ private final class CameraUIKitViewController: UIViewController {
 
     private let bottomOverlayView = UIView()
     private let topContainerHeight: CGFloat = 46
+    private let shutterButtonSize: CGFloat = 80
+    private let shutterTopOverflow: CGFloat = 4 // 바텀바 상단 위로 올라오는 값
+    private let shutterBottomPaddingTall: CGFloat = 35
+    private let shutterBottomPaddingCompact: CGFloat = 12
     private let newFrameButton = UIButton(type: .custom)
     private let newFrameIconView = UIImageView()
     private let newFrameLabel = UILabel()
@@ -257,7 +261,7 @@ private final class CameraUIKitViewController: UIViewController {
     private var filterOverlayHostingController: UIHostingController<AnyView>?
 
     private var previewHeightConstraint: Constraint?
-    private var previewTopConstraint: Constraint?
+    private var previewBottomConstraint: Constraint?
     private var bottomHeightConstraint: Constraint?
     private var bottomOverlayTopInsetConstraint: Constraint?
 
@@ -273,6 +277,13 @@ private final class CameraUIKitViewController: UIViewController {
 
     private var zoomButtons: [Int: UIButton] = [:]
     private var currentZoomOptions: [ZoomOption] = []
+
+    private lazy var hitTestProbeTapGesture: UITapGestureRecognizer = {
+        let gesture = UITapGestureRecognizer(target: self, action: #selector(handleHitTestProbeTap(_:)))
+        gesture.cancelsTouchesInView = false
+        gesture.delegate = self
+        return gesture
+    }()
 
     init(
         viewModel: CameraViewModel,
@@ -386,6 +397,8 @@ private final class CameraUIKitViewController: UIViewController {
         zoomContainerView.isAccessibilityElement = true
         bottomContainerView.isAccessibilityElement = true
 
+        view.addGestureRecognizer(hitTestProbeTapGesture)
+
         sampleImageView.snp.makeConstraints { make in
             make.edges.equalToSuperview()
         }
@@ -488,6 +501,7 @@ private final class CameraUIKitViewController: UIViewController {
         newFrameStack.spacing = 4
 
         newFrameButton.addTarget(self, action: #selector(handleNewFrameTapped), for: .touchUpInside)
+        newFrameButton.addTarget(self, action: #selector(handleNewFrameTouchDown), for: .touchDown)
         newFrameButton.addSubview(newFrameStack)
 
         bottomContainerView.addSubview(bottomOverlayView)
@@ -526,6 +540,11 @@ private final class CameraUIKitViewController: UIViewController {
         newFrameIconView.layer.shadowOffset = CGSize(width: 20, height: 0)
     }
 
+    private func bottomBarHeight(isTallScreen: Bool) -> CGFloat {
+        let bottomPadding = isTallScreen ? shutterBottomPaddingTall : shutterBottomPaddingCompact
+        return shutterButtonSize - shutterTopOverflow + bottomPadding
+    }
+
     private func setupLayout() {
         topContainerView.snp.makeConstraints { make in
             make.top.leading.trailing.equalToSuperview()
@@ -534,7 +553,7 @@ private final class CameraUIKitViewController: UIViewController {
 
         bottomContainerView.snp.makeConstraints { make in
             make.leading.trailing.bottom.equalToSuperview()
-            bottomHeightConstraint = make.height.equalTo(111).constraint
+            bottomHeightConstraint = make.height.equalTo(bottomBarHeight(isTallScreen: true)).constraint
         }
 
         zoomContainerView.snp.makeConstraints { make in
@@ -543,7 +562,7 @@ private final class CameraUIKitViewController: UIViewController {
         }
 
         previewContainerView.snp.makeConstraints { make in
-            previewTopConstraint = make.top.equalTo(topContainerView.snp.bottom).constraint
+            previewBottomConstraint = make.bottom.equalTo(bottomContainerView.snp.top).constraint
             make.leading.trailing.equalToSuperview()
             previewHeightConstraint = make.height.equalTo(0).constraint
         }
@@ -629,24 +648,23 @@ private final class CameraUIKitViewController: UIViewController {
         // [iPhone 기준] SnapKit 레이아웃 정합 규칙
         // 1) top: 46pt
         // 2) preview: 화면폭 전체, 높이 = width * ratio
-        // 3) bottom: tall(>2.0) 111pt, short 60pt
+        // 3) bottom: 셔터(80) + 상/하 패딩 기반 높이(상단 4pt 오버랩 정책 반영)
         // 4) zoom: bottom top - 20pt
         let isPhone = UIDevice.current.userInterfaceIdiom == .phone
         let effectiveTall = isPhone ? isTallScreen : isTallScreen
 
         let previewWidth: CGFloat = bounds.width
         let previewHeight: CGFloat = previewWidth * ratio
-        let bottomHeight: CGFloat = effectiveTall ? 111 : 60
-        let allowTopOverlap: Bool = RuntimeTestingOptions.previewTopPlacement() == .overlapTopBar
-        let previewTopOffset: CGFloat = allowTopOverlap ? -topContainerHeight : 0
-        let requiredHeight = previewHeight + bottomHeight + (allowTopOverlap ? 0 : topContainerHeight)
+        let bottomHeight: CGFloat = bottomBarHeight(isTallScreen: effectiveTall)
+        let filterTopInset: CGFloat = effectiveTall ? 20 : 0
+        let requiredHeight = previewHeight + bottomHeight + topContainerHeight
         let needsTopTransparent = requiredHeight > bounds.height
         applyTopBarBackground(isTransparent: needsTopTransparent)
 
         previewHeightConstraint?.update(offset: previewHeight)
-        previewTopConstraint?.update(offset: previewTopOffset)
+        previewBottomConstraint?.update(offset: 0)
         bottomHeightConstraint?.update(offset: bottomHeight)
-        bottomOverlayTopInsetConstraint?.update(offset: effectiveTall ? 20 : 0)
+        bottomOverlayTopInsetConstraint?.update(offset: filterTopInset)
 
         newFrameButtonWidthConstraint?.update(offset: effectiveTall ? 70 : 56)
         newFrameButtonHeightConstraint?.update(offset: effectiveTall ? 80 : 56)
@@ -654,6 +672,21 @@ private final class CameraUIKitViewController: UIViewController {
         newFrameIconHeightConstraint?.update(offset: effectiveTall ? 50 : 40)
         newFrameIconView.layer.shadowOpacity = effectiveTall ? 1 : 0
         newFrameLabel.isHidden = !effectiveTall
+
+        // 셔터 세로 배치 옵션
+        // - topOverflow: 셔터 top이 바텀바(top)보다 4pt 위
+        // - centerY: 필터 영역의 centerY에 정렬
+        let shutterVerticalPlacement = RuntimeTestingOptions.shutterVerticalPlacement()
+        let shutterVerticalOffset: CGFloat
+        switch shutterVerticalPlacement {
+        case .topOverflow:
+            let desiredShutterCenterYFromBottomTop = (-shutterTopOverflow) + (shutterButtonSize / 2)
+            let currentShutterCenterYFromBottomTop = (bottomHeight + filterTopInset) / 2
+            shutterVerticalOffset = desiredShutterCenterYFromBottomTop - currentShutterCenterYFromBottomTop
+        case .centerY:
+            shutterVerticalOffset = 0
+        }
+        filterCollectionController?.setShutterVerticalOffset(shutterVerticalOffset)
 
         let newFrameSize = CGSize(width: previewWidth, height: previewHeight)
         DispatchQueue.main.async { [weak self] in
@@ -666,8 +699,9 @@ private final class CameraUIKitViewController: UIViewController {
 
         CameraLayoutDebugLog.log("[CameraLayout] bounds=(\(bounds.width),\(bounds.height)) isTall=\(isTallScreen) ratio=\(String(format: "%.4f", ratio))")
         CameraLayoutDebugLog.log("[CameraLayout] topH=\(topContainerView.frame.height) bottomH=\(bottomContainerView.frame.height) zoomBottom=\(zoomContainerView.frame.maxY) bottomTop=\(bottomContainerView.frame.minY)")
-        CameraLayoutDebugLog.log("[CameraLayout] previewTopOffset=\(previewTopOffset) overlapTopBar=\(allowTopOverlap)")
+        CameraLayoutDebugLog.log("[CameraLayout] previewBottomAligned=true")
         CameraLayoutDebugLog.log("[CameraLayout] preview=(\(previewContainerView.frame.origin.x),\(previewContainerView.frame.origin.y),\(previewContainerView.frame.size.width),\(previewContainerView.frame.size.height))")
+        CameraLayoutDebugLog.log("[CameraLayout] shutterVerticalPlacement=\(shutterVerticalPlacement.rawValue) offset=\(shutterVerticalOffset)")
         CameraLayoutDebugLog.log("[CameraLayout] frameSize=(\(viewModel.frameSize.size.width),\(viewModel.frameSize.size.height))")
     }
 
@@ -1020,6 +1054,41 @@ private final class CameraUIKitViewController: UIViewController {
         child.removeFromParent()
     }
 
+    private func isHitTestLoggingEnabled() -> Bool {
+        RuntimeTestingOptions.isHitTestLoggingEnabled()
+    }
+
+    private func hitTestViewDescription(_ view: UIView?) -> String {
+        guard let view else { return "nil" }
+        return "\(type(of: view))(hidden=\(view.isHidden), alpha=\(String(format: "%.2f", view.alpha)), interaction=\(view.isUserInteractionEnabled))"
+    }
+
+    @objc
+    private func handleHitTestProbeTap(_ gesture: UITapGestureRecognizer) {
+        guard isHitTestLoggingEnabled() else { return }
+
+        let pointInRoot = gesture.location(in: view)
+        let rootHit = view.hitTest(pointInRoot, with: nil)
+
+        let pointInNewFrame = gesture.location(in: newFrameButton)
+        let isInsideNewFrame = newFrameButton.bounds.contains(pointInNewFrame)
+
+        let pointInFilterHost = gesture.location(in: filterHostView)
+        let isInsideFilterHost = filterHostView.bounds.contains(pointInFilterHost)
+
+        print("[CameraHitTest] tapRoot=\(pointInRoot), rootHit=\(hitTestViewDescription(rootHit)), newFrameContains=\(isInsideNewFrame), filterHostContains=\(isInsideFilterHost)")
+
+        if let filterView = filterCollectionController?.view {
+            let pointInFilterVC = gesture.location(in: filterView)
+            let filterHit = filterView.hitTest(pointInFilterVC, with: nil)
+            print("[CameraHitTest] filterTap=\(pointInFilterVC), filterHit=\(hitTestViewDescription(filterHit))")
+        }
+    }
+
+    func gestureRecognizer(_ gestureRecognizer: UIGestureRecognizer, shouldRecognizeSimultaneouslyWith otherGestureRecognizer: UIGestureRecognizer) -> Bool {
+        true
+    }
+
     @objc
     private func handlePinchGesture(_ gesture: UIPinchGestureRecognizer) {
         switch gesture.state {
@@ -1047,7 +1116,17 @@ private final class CameraUIKitViewController: UIViewController {
     }
 
     @objc
+    private func handleNewFrameTouchDown() {
+        guard isHitTestLoggingEnabled() else { return }
+        print("[CameraHitTest] newFrameButton touchDown")
+    }
+
+    @objc
     private func handleNewFrameTapped() {
+        if isHitTestLoggingEnabled() {
+            print("[CameraHitTest] newFrameButton touchUpInside -> navigate photoPicker")
+        }
+
         Task { @MainActor in
             naviManager.push(screen: Screen.photoPicker)
         }

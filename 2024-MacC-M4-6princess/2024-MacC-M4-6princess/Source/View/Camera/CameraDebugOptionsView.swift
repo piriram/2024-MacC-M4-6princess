@@ -6,6 +6,8 @@ struct CameraDebugOptionsView: View {
     @State private var cameraSource: CameraSourceOption = RuntimeTestingOptions.cameraSource()
     @State private var cutoutEngine: CutoutEngineOption = RuntimeTestingOptions.cutoutEngine()
     @State private var previewTopPlacement: PreviewTopPlacementOption = RuntimeTestingOptions.previewTopPlacement()
+    @State private var shutterVerticalPlacement: ShutterVerticalPlacementOption = RuntimeTestingOptions.shutterVerticalPlacement()
+    @State private var hitTestLoggingEnabled: Bool = RuntimeTestingOptions.isHitTestLoggingEnabled()
 
     let onApply: () -> Void
 
@@ -41,6 +43,25 @@ struct CameraDebugOptionsView: View {
                         .font(.footnote)
                         .foregroundStyle(.secondary)
                 }
+
+                Section("Shutter Vertical") {
+                    Picker("Vertical Placement", selection: $shutterVerticalPlacement) {
+                        ForEach(ShutterVerticalPlacementOption.allCases) { option in
+                            Text(option.displayName).tag(option)
+                        }
+                    }
+                    .pickerStyle(.segmented)
+                    Text("Top Overflow: shutter top is 4pt above bottom bar. Center Y: shutter is centered vertically in filter area.")
+                        .font(.footnote)
+                        .foregroundStyle(.secondary)
+                }
+
+                Section("Interaction Debug") {
+                    Toggle("Enable Hit Test Log", isOn: $hitTestLoggingEnabled)
+                    Text("Logs tap location + hit-tested view, and whether the New Frame button area actually receives touch.")
+                        .font(.footnote)
+                        .foregroundStyle(.secondary)
+                }
             }
             .navigationTitle("Debug Testing")
             .toolbar {
@@ -53,6 +74,8 @@ struct CameraDebugOptionsView: View {
                         RuntimeTestingOptions.setCameraSource(cameraSource)
                         RuntimeTestingOptions.setCutoutEngine(cutoutEngine)
                         RuntimeTestingOptions.setPreviewTopPlacement(previewTopPlacement)
+                        RuntimeTestingOptions.setShutterVerticalPlacement(shutterVerticalPlacement)
+                        RuntimeTestingOptions.setHitTestLoggingEnabled(hitTestLoggingEnabled)
                         onApply()
                         dismiss()
                     }

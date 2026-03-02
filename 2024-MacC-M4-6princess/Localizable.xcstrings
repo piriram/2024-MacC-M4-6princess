@@ -242,6 +242,9 @@
     "Debug Testing" : {
 
     },
+    "Enable Hit Test Log" : {
+
+    },
     "font.bold" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -365,6 +368,9 @@
         }
       }
     },
+    "Interaction Debug" : {
+
+    },
     "light" : {
       "localizations" : {
         "ar" : {
@@ -405,6 +411,9 @@
         }
       }
     },
+    "Logs tap location + hit-tested view, and whether the New Frame button area actually receives touch." : {
+
+    },
     "Off" : {
       "localizations" : {
         "ar" : {
@@ -440,6 +449,9 @@
       }
     },
     "Overlap Top Bar: preview starts from y=0 and can cover top area" : {
+
+    },
+    "Shutter Vertical" : {
 
     },
     "stickerTab.bubble" : {
@@ -693,6 +705,12 @@
 
     },
     "Top Bar Placement" : {
+
+    },
+    "Top Overflow: shutter top is 4pt above bottom bar. Center Y: shutter is centered vertically in filter area." : {
+
+    },
+    "Vertical Placement" : {
 
     },
     "가져오기 품질" : {

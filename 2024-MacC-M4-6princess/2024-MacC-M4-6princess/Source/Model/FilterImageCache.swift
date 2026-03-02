@@ -27,7 +27,7 @@ final class FilterImageCache {
             return nil
         }
 
-        guard let image = UIImage(data: data) else {
+        guard let image = SafeImageDecoder.decodeImage(from: data) else {
             return nil
         }
 

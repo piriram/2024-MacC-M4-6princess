@@ -24,8 +24,9 @@ extension CameraView {
         
         do {
             let results = try viewContext.fetch(fetchRequest)
-            if let storedImage = results.first, let imageData = storedImage.image {
-                frameManager.resultImage = UIImage(data: imageData)
+            if let storedImage = results.first,
+               let imageData = storedImage.image {
+                frameManager.resultImage = SafeImageDecoder.decodeImage(from: imageData)
             } else {
                 frameManager.resultImage = nil
             }
