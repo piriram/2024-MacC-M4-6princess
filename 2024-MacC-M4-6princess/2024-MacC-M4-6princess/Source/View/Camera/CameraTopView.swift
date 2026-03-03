@@ -14,44 +14,40 @@ struct CameraTopView: View {
     @State var showDebugOptions = false
     
     var body: some View {
-        if UIScreen.main.bounds.height/UIScreen.main.bounds.width > 2.0 {
-            HStack() {
-                Spacer()
-                CameraTimerView(viewModel: viewModel, motionManager: motionManager)
-                    .padding(.trailing,5)
-                Button {
-                    viewModel.changeCamera()
-                } label: {
-                    Image("cameraReverseIcon")
-                        .resizable()
-                        .frame(width: 30, height: 30)
-                        .rotationEffect(motionManager.rotationAngle(for: motionManager.currentOrientation))
-                        .animation(.easeInOut, value: motionManager.currentOrientation)
-                    
-                }
-                .padding(.trailing, 20)
-                #if DEBUG
-                Button {
-                    showDebugOptions = true
-                } label: {
-                    Image(systemName: "ladybug")
-                        .font(.system(size: 20))
-                        .foregroundStyle(.black)
-                }
-                .padding(.trailing, 16)
-                #endif
+        let isTallScreen = UIScreen.main.bounds.height / UIScreen.main.bounds.width > 2.0
+
+        HStack {
+            Spacer()
+            CameraTimerView(viewModel: viewModel, motionManager: motionManager)
+                .padding(.trailing, isTallScreen ? 5 : 0)
+            Button {
+                viewModel.changeCamera()
+            } label: {
+                Image("cameraReverseIcon")
+                    .resizable()
+                    .frame(width: 30, height: 30)
+                    .rotationEffect(motionManager.rotationAngle(for: motionManager.currentOrientation))
+                    .animation(.easeInOut, value: motionManager.currentOrientation)
             }
-            .frame(width: UIScreen.main.bounds.width, height: 46)
-            .background(.white)
-            .sheet(isPresented: $showDebugOptions) {
-                CameraDebugOptionsView {
-                    viewModel.refreshRuntimeDependencies()
-                    viewModel.checkVideoAuthorization()
-                }
+            .padding(.trailing, isTallScreen ? 20 : 0)
+#if DEBUG
+            Button {
+                showDebugOptions = true
+            } label: {
+                Image(systemName: "ladybug")
+                    .font(.system(size: 20))
+                    .foregroundStyle(.black)
             }
+            .padding(.trailing, 16)
+#endif
         }
-        else{
-            cameraIPadTopView
+        .frame(width: UIScreen.main.bounds.width, height: 46)
+        .background(.white)
+        .sheet(isPresented: $showDebugOptions) {
+            CameraDebugOptionsView {
+                viewModel.refreshRuntimeDependencies()
+                viewModel.checkVideoAuthorization()
+            }
         }
     }
 }
