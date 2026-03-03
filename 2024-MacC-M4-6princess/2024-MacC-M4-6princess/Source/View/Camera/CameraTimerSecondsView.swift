@@ -17,7 +17,9 @@ struct CameraTimerSecondsView: View {
             }
         }
         .onAppear {
-            startTimer()
+            if viewModel.delayTime > 0 {
+                startTimer()
+            }
         }
         .onChange(of: viewModel.remainingTime, initial: false) { oldValue, newValue in
             if newValue < viewModel.delayTime && newValue >= 0 {
@@ -40,7 +42,9 @@ struct CameraTimerSecondsView: View {
             .sink { [self] _ in
                 if viewModel.remainingTime > 0 {
                     viewModel.remainingTime -= 1
-                    viewModel.backgroundOpacity += (0.6 / viewModel.delayTime)
+                    if viewModel.delayTime > 0 {
+                        viewModel.backgroundOpacity += (0.6 / viewModel.delayTime)
+                    }
 //                    print("-1초 : 현재 남은 시간은 \(viewModel.remainingTime)")
                 }
                 if viewModel.remainingTime <= 0 {

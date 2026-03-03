@@ -39,6 +39,7 @@ class DFModifyViewModel: ObservableObject {
     @Published var modelList: [SubjectImage] = []
     
     @Published var showAgain: Bool = false
+    @Published var appError: AppError?
     
     /// 레이어 변경 관련 변수
     @Published var isPressedUp = false
@@ -50,7 +51,15 @@ class DFModifyViewModel: ObservableObject {
     var selectedStickerTab = StickerTab.bubble
     
     @Published var style:TextStyle = TextStyle(attributedString: NSAttributedString(string: ""), txt: "", font: .modern, color: ColorPreset.colorPallete[0], alignment: .center, fontSize: 20 )
+    private let imagePipeline: ImagePipelining = ImagePipelineService()
     
+    private func reportError(_ error: AppError, debug: String? = nil) {
+        appError = error
+        if let debug {
+            print(debug)
+        }
+    }
+
     func backgroundGesture() -> some Gesture {
         
         MagnifyGesture()
@@ -138,10 +147,10 @@ class DFModifyViewModel: ObservableObject {
         
         Task {
             // 저장 완료 메시지 숨기기
-            let render = ImageRenderer(content: view.frame(width: UIScreen.main.bounds.width, height: UIScreen.main.bounds.width * 4/3))
-            //            render.scale = scaleCompute(inputImage)
-            render.scale = UIScreen.main.scale + 1
-            frameImage = render.uiImage
+            frameImage = imagePipeline.renderImage(
+                content: view.frame(width: UIScreen.main.bounds.width, height: UIScreen.main.bounds.width * 4/3),
+                scale: UIScreen.main.scale + 1
+            )
             addImage(albumImageData: frameImage?.pngData(), context: context, subjects: imageModel)
         }
         
@@ -167,10 +176,11 @@ class DFModifyViewModel: ObservableObject {
         
         Task {
             // 저장 완료 메시지 숨기기
-            let render = ImageRenderer(content: view.frame(width: UIScreen.main.bounds.width, height: UIScreen.main.bounds.width * 4/3))
-            render.scale = UIScreen.main.scale
-            frameImage = render.uiImage
-            
+            frameImage = imagePipeline.renderImage(
+                content: view.frame(width: UIScreen.main.bounds.width, height: UIScreen.main.bounds.width * 4/3),
+                scale: UIScreen.main.scale
+            )
+
             do {
                 let results = try viewContext.fetch(fetchRequest)
                 if let storedImage = results.first {
@@ -213,7 +223,7 @@ class DFModifyViewModel: ObservableObject {
                 saveContext(context: viewContext)
                 
             } catch {
-                print("Error fetching frame: \(error)")
+                reportError(.coreDataFetchFailed, debug: "Error fetching frame: \(error)")
                 frameManager.resultImage = nil
             }
         }
@@ -227,7 +237,7 @@ class DFModifyViewModel: ObservableObject {
         do {
             try context.save()
         } catch {
-            print("Error saving managed object context: \(error)")
+            reportError(.coreDataSaveFailed, debug: "Error saving managed object context: \(error)")
         }
     }
     func addImage(albumImageData: Data?, context: NSManagedObjectContext, subjects: ImageListModel) {
@@ -269,14 +279,7 @@ class DFModifyViewModel: ObservableObject {
     }
     
     func scaleCompute(_ image: UIImage) -> CGFloat {
-        
-        var scale: CGFloat = image.size.height / (UIScreen.main.bounds.width * 4/3)
-        
-        
-        if image.size.width / scale > UIScreen.main.bounds.width || image.size.width >= image.size.height {
-            scale = image.size.width / UIScreen.main.bounds.width
-        }
-        return scale
+        imagePipeline.displayScale(for: image, screenWidth: UIScreen.main.bounds.width)
     }
     
     func makeImageList() {
@@ -293,21 +296,28 @@ class DFModifyViewModel: ObservableObject {
     
     func makeImage(view: some View, image: UIImage) -> UIImage? {
         
-        let resultImage: UIImage?
-        let render = ImageRenderer(content: view)
-        render.scale = scaleCompute(image)
-        if let rend = render.uiImage {
-            if indexOfImageList < imageList.count - 1 {
-                for _ in indexOfImageList+1..<imageList.count {
-                    imageList.removeLast()
-                }
-            }
-            imageList[indexOfImageList].image = rend
-            indexOfImageList += 1
-            
+        if imageList.isEmpty {
+            imageList.append(SubjectImage())
+            indexOfImageList = 0
         }
-        resultImage = imageList[indexOfImageList].image
-        return resultImage
+
+        guard let renderedImage = imagePipeline.renderImage(content: view, scale: scaleCompute(image)) else { return nil }
+
+        if indexOfImageList < imageList.count - 1 {
+            for _ in indexOfImageList+1..<imageList.count {
+                imageList.removeLast()
+            }
+        }
+
+        guard imageList.indices.contains(indexOfImageList) else { return nil }
+        imageList[indexOfImageList].image = renderedImage
+        indexOfImageList += 1
+
+        if imageList.count == indexOfImageList {
+            imageList.append(SubjectImage())
+        }
+
+        return renderedImage
     }
     
     

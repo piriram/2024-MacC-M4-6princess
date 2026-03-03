@@ -7,54 +7,60 @@ struct PhotosPickerView: View {
     
     @StateObject private var vm: PhotosPickerViewModel = PhotosPickerViewModel()
     @State private var isPresented: Bool = false
+    @State private var photoAccessDenied = false
+    @State private var permissionChecked = false
     @EnvironmentObject var naviManager: NavigationManager
     @EnvironmentObject var frameManager: FrameManager
-    
+
     var body: some View {
         ZStack {
             VStack {
                 toolbarButton
-//                ScrollViewWithOffset
-//                    .padding(.top, 10)
-                ImageScrollViewRepresentable(images: vm.models) {
-                    print("끝까지 스크롤")
-                    if vm.album.count - vm.currentIndex >= 60 {
-                        vm.currentIndex += 60
-                        vm.fetchedAlbum += 60
-                        print("모델삽입")
-                        
-                    } else {
-                        vm.currentIndex = vm.album.count
-                    }
-                    vm.fetchAlbum()
-                    for i in vm.currentIndex..<vm.album.count {
-                        vm.loadImage(for: vm.album[i], size: CGSize(width: UIScreen.main.bounds.width*0.3, height: UIScreen.main.bounds.width*0.3), index: i)
-                    }
-                    
-                }onImageTap: { index in
-                    print("사진클릭!")
-                    if vm.selectedIndex < 0 {
-                        vm.selectedIndex = index
-                        vm.models[index].isSelected = true
-                        
-                    }
-                    
-                    if vm.selectedIndex >= 0 {
-                        vm.getImage(image: vm.models[vm.selectedIndex], for: vm.album[vm.selectedIndex]) {
-                            
-                            if let image = vm.outputImage {
-                                frameManager.pickedImage = image
-                            }
-                            
-                            DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
-                                if frameManager.pickedImage != nil  && vm.models[index].isSelected {
-                                    naviManager.push(screen: Screen.frameEdit)
+                qualityOptionPicker
+                if vm.models.isEmpty && permissionChecked {
+                    emptyStateView
+                        .padding(.top, 40)
+                } else {
+                    ImageScrollViewRepresentable(
+                        images: vm.models,
+                        onScrollToBottom: {
+                            if vm.canLoadMorePages {
+                                let addedRange = vm.fetchNextPage()
+                                if addedRange.isEmpty {
+                                    return
+                                }
+
+                                for i in addedRange {
+                                    vm.loadImage(for: vm.album[i], index: i)
                                 }
                             }
+                        },
+                        onVisibleIndexChange: { index in
+                            vm.prefetchAround(index: index)
+                        },
+                        onImageTap: { index in
+                            guard index < vm.models.count, index < vm.album.count else { return }
+
+                            if vm.selectedIndex >= 0 {
+                                vm.models[vm.selectedIndex].isSelected = false
+                            }
+                            vm.selectedIndex = index
+                            vm.models[index].isSelected = true
+
+                            let tappedModel = vm.models[index]
+                            vm.getImage(image: tappedModel, for: vm.album[index]) { image in
+                                guard vm.selectedIndex == index else { return }
+                                guard let image else {
+                                    print("[PhotoImport] failed to open selected asset index=\(index) id=\(vm.album[index].localIdentifier)")
+                                    return
+                                }
+                                frameManager.pickedImage = image
+                                naviManager.push(screen: Screen.frameEdit)
+                            }
                         }
-                    }
+                    )
+                    .padding(.top, 10)
                 }
-                .padding(.top, 10)
             }
             VStack {
                 toastMessage
@@ -63,26 +69,36 @@ struct PhotosPickerView: View {
             }
         }
         .onAppear {
-            
             if vm.selectedIndex >= 0 {
                 vm.models[vm.selectedIndex].isSelected = false
                 vm.selectedIndex = -1
                 frameManager.pickedImage = nil
             }
-            
+
             PHPhotoLibrary.requestAuthorization(for: .readWrite) { status in
-                if status == .authorized {
-                    //                    DispatchQueue.main.async {
-                    if vm.firstAppear {
-                        vm.fetchAlbum()
-                        print(vm.album.count)
-                        for i in 0..<vm.album.count {
-                            print("모델 삽입 실행됨")
-                            vm.loadImage(for: vm.album[i], size: CGSize(width: UIScreen.main.bounds.width*0.3, height: UIScreen.main.bounds.width*0.3), index: i)
+                DispatchQueue.main.async {
+                    permissionChecked = true
+
+                    switch status {
+                    case .authorized, .limited:
+                        photoAccessDenied = false
+
+                        if vm.firstAppear || vm.models.isEmpty {
+                            let initialRange = vm.fetchInitialAlbum()
+                            if !initialRange.isEmpty {
+                                for i in initialRange {
+                                    vm.loadImage(for: vm.album[i], index: i)
+                                }
+                            }
+                            vm.firstAppear = false
                         }
-                        vm.firstAppear = false
+                    case .denied, .restricted:
+                        photoAccessDenied = true
+                    case .notDetermined:
+                        break
+                    @unknown default:
+                        break
                     }
-                    //                    }
                 }
             }
             vm.changeOpacity()
@@ -121,6 +137,41 @@ extension PhotosPickerView {
 }
 
 extension PhotosPickerView {
+    var emptyStateView: some View {
+        VStack(spacing: 12) {
+            Image(systemName: photoAccessDenied ? "lock.slash" : "photo.on.rectangle")
+                .font(.system(size: 28, weight: .semibold))
+                .foregroundStyle(.gray)
+
+            Text(photoAccessDenied ? "사진 접근 권한이 필요해요." : "표시할 사진이 없어요.")
+                .font(.headline)
+                .foregroundStyle(.gray01)
+
+            Text(photoAccessDenied
+                 ? "설정 > 개인정보 보호 및 보안 > 사진에서 접근 권한을 허용해 주세요."
+                 : "앨범에 사진이 없거나 접근 가능한 사진이 없습니다.\n시뮬레이터라면 Photos 앱에 이미지를 먼저 추가해 주세요.")
+                .font(.footnote)
+                .multilineTextAlignment(.center)
+                .foregroundStyle(.gray)
+                .padding(.horizontal, 24)
+        }
+        .frame(maxWidth: .infinity)
+    }
+
+    var qualityOptionPicker: some View {
+        Picker("가져오기 품질", selection: Binding(
+            get: { vm.selectedImportQuality },
+            set: { vm.updateImportQuality($0) }
+        )) {
+            ForEach(PhotoImportQualityOption.allCases) { option in
+                Text(option.title).tag(option)
+            }
+        }
+        .pickerStyle(.segmented)
+        .padding(.horizontal, 20)
+        .padding(.top, 8)
+    }
+
     var toolbarButton: some View {
         
         HStack {

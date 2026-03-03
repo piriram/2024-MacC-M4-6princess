@@ -7,3 +7,4 @@
 */
 "NSPhotoLibraryUsageDescription" = "使用此应用需要访问照片库。";
 "NSCameraUsageDescription" = "使用此应用需要访问相机。";
+"NSPhotoLibraryAddUsageDescription" = "此应用需要访问照片库才能保存编辑后的图片。";

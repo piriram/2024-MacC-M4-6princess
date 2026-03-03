@@ -1,34 +1,20 @@
-//
-//  HomeViewmodel.swift
-//  2024-MacC-M4-6princess
-//
-//  Created by 김이예은 on 3/1/25.
-//
-
 import SwiftUI
 import CoreData
 
 class HomeViewModel: ObservableObject {
     @Published var imageDataArray: [(id: UUID, data: Data, isLoaded: Bool)] = []
-    private var viewContext: NSManagedObjectContext
     private var imageCache: [UUID: Data] = [:]
+    private let storeImageService: StoreImagePersisting
 
-    init(context: NSManagedObjectContext) {
-        self.viewContext = context
+    init(context: NSManagedObjectContext, storeImageService: StoreImagePersisting? = nil) {
+        self.storeImageService = storeImageService ?? StoreImagePersistenceService(context: context)
     }
 
     /// Core Data에서 이미지 ID를 가져옴
     func loadImages() {
-        let request = StoreImages.fetchRequest()
-//        request.sortDescriptors = [NSSortDescriptor(keyPath: \StoreImages.order, ascending: true)]
-        request.sortDescriptors = [NSSortDescriptor(keyPath: \StoreImages.createdDate, ascending: true)]
-        
         do {
-            let storedImages = try viewContext.fetch(request)
-            imageDataArray = storedImages.compactMap { storeImage in
-                guard let id = storeImage.uuid else { return nil }
-                return (id: id, data: Data(), isLoaded: false)
-            }
+            let records = try storeImageService.fetchRecords(sort: .createdDateAscending)
+            imageDataArray = records.map { (id: $0.id, data: Data(), isLoaded: false) }
         } catch {
             print("이미지 로드 실패: \(error)")
         }
@@ -39,7 +25,7 @@ class HomeViewModel: ObservableObject {
         if let cached = imageCache[id] {
             return cached
         }
-        
+
         if let imageData = loadImageData(for: id) {
             imageCache[id] = imageData
             return imageData
@@ -49,17 +35,20 @@ class HomeViewModel: ObservableObject {
 
     /// 특정 이미지 데이터를 Core Data에서 가져옴
     func loadImageData(for id: UUID) -> Data? {
-        let request = StoreImages.fetchRequest()
-        request.predicate = NSPredicate(format: "uuid == %@", id as CVarArg)
-        
         do {
-            guard let storeImage = try viewContext.fetch(request).first,
-                  let imageData = storeImage.image else {
+            guard let imageData = try storeImageService.fetchImageData(for: id),
+                  let image = SafeImageDecoder.decodeImage(from: imageData),
+                  let downsampled = downsampleImage(
+                    image,
+                    to: CGSize(
+                        width: UIScreen.main.bounds.width / 3,
+                        height: (UIScreen.main.bounds.width / 3) * (4 / 3)
+                    )
+                  )?.pngData()
+            else {
                 return nil
             }
-            return downsampleImage(UIImage(data: imageData)!,
-                                   to: CGSize(width: UIScreen.main.bounds.width / 3,
-                                              height: (UIScreen.main.bounds.width / 3) * (4 / 3)))?.pngData()
+            return downsampled
         } catch {
             print("이미지 로딩 실패: \(error)")
             return nil
@@ -73,7 +62,7 @@ class HomeViewModel: ObservableObject {
               let imageSource = CGImageSourceCreateWithData(data as CFData, imageSourceOptions) else {
             return nil
         }
-        
+
         let maxDimensionInPixels = max(pointSize.width, pointSize.height) * UIScreen.main.scale
         let downsampleOptions = [
             kCGImageSourceCreateThumbnailFromImageAlways: true,
@@ -81,12 +70,11 @@ class HomeViewModel: ObservableObject {
             kCGImageSourceCreateThumbnailWithTransform: true,
             kCGImageSourceThumbnailMaxPixelSize: maxDimensionInPixels
         ] as CFDictionary
-        
+
         guard let downsampledImage = CGImageSourceCreateThumbnailAtIndex(imageSource, 0, downsampleOptions) else {
             return nil
         }
-        
+
         return UIImage(cgImage: downsampledImage)
     }
 }
-

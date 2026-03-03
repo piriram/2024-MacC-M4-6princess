@@ -2,14 +2,20 @@ import SwiftUI
 import UIKit
 
 struct ImageScrollViewRepresentable: UIViewRepresentable {
+    private enum Layout {
+        static let numberOfColumns = 3
+        static let spacing: CGFloat = 5
+        static let itemSize = CGSize(width: UIScreen.main.bounds.width * 0.32, height: UIScreen.main.bounds.height * 0.2)
+    }
     
     var images: [PickedImageModel]
     var onScrollToBottom: () -> Void
+    var onVisibleIndexChange: (Int) -> Void
     var onImageTap: (Int) -> Void
     
     func makeCoordinator() -> Coordinator {
-         Coordinator(onScrollToBottom: onScrollToBottom, onImageTap: onImageTap)
-     }
+        Coordinator(onScrollToBottom: onScrollToBottom, onImageTap: onImageTap, onVisibleIndexChange: onVisibleIndexChange)
+    }
     
     func makeUIView(context: Context) -> UIScrollView {
         let scrollView = UIScrollView()
@@ -17,70 +23,82 @@ struct ImageScrollViewRepresentable: UIViewRepresentable {
         scrollView.alwaysBounceVertical = true
         scrollView.alwaysBounceHorizontal = false
 
-        let contentView = buildGridView(with: images, context: context)
+        let contentView = UIView()
         contentView.tag = 1000
         scrollView.addSubview(contentView)
+        updateContent(contentView, with: images, context: context)
         scrollView.contentSize = contentView.frame.size
 
         return scrollView
     }
 
     func updateUIView(_ scrollView: UIScrollView, context: Context) {
-        
-        scrollView.subviews.forEach {
-            if $0.tag == 1000 { $0.removeFromSuperview() }
-        }
-
-        let contentView = buildGridView(with: images, context: context)
-        contentView.tag = 1000
-        scrollView.addSubview(contentView)
+        guard let contentView = scrollView.viewWithTag(1000) else { return }
+        updateContent(contentView, with: images, context: context)
         scrollView.contentSize = contentView.frame.size
-        
     }
-    
-    func buildGridView(with images: [PickedImageModel], context: Context) -> UIView {
-        let contentView = UIView()
-        let numberOfColumns = 3
-        let spacing: CGFloat = 5
-        let itemSize: CGSize = CGSize(width: UIScreen.main.bounds.width * 0.32, height: UIScreen.main.bounds.height * 0.2)
-//        let itemSize: CGFloat = UIScreen.main.bounds.width * 0.32
 
-        for i in images {
-            let row = i.index / numberOfColumns
-            let col = i.index % numberOfColumns
+    private func itemOrigin(at index: Int) -> CGPoint {
+        let row = index / Layout.numberOfColumns
+        let col = index % Layout.numberOfColumns
+        return CGPoint(
+            x: CGFloat(col) * (Layout.itemSize.width + Layout.spacing),
+            y: CGFloat(row) * (Layout.itemSize.height + Layout.spacing)
+        )
+    }
 
-            let imageView = UIImageView(image: i.image)
-            imageView.contentMode = .scaleAspectFill
-            imageView.clipsToBounds = true
-            imageView.isUserInteractionEnabled = true
-            imageView.tag = i.index
+    private func updateContent(_ contentView: UIView, with images: [PickedImageModel], context: Context) {
+        let validTagSet = Set(images.map(\.index))
 
-            // 탭 제스처 추가
-            let tap = UITapGestureRecognizer(target: context.coordinator, action: #selector(Coordinator.imageTapped(_:)))
-            imageView.addGestureRecognizer(tap)
-
-            let x = CGFloat(col) * (itemSize.width + spacing)
-            let y = CGFloat(row) * (itemSize.height + spacing)
-            imageView.frame = CGRect(x: x, y: y, width: itemSize.width, height: itemSize.height)
-
-            contentView.addSubview(imageView)
+        // 삭제된 셀 정리
+        contentView.subviews.forEach { imageView in
+            if imageView.tag != 1000, !validTagSet.contains(imageView.tag) {
+                imageView.removeFromSuperview()
+            }
         }
 
-        let rows = (images.count + numberOfColumns - 1) / numberOfColumns
-        let contentWidth = CGFloat(numberOfColumns) * (itemSize.width + spacing) - spacing
-        let contentHeight = CGFloat(rows) * (itemSize.height + spacing) - spacing
-        contentView.frame = CGRect(x: 0, y: 0, width: contentWidth, height: contentHeight)
+        for model in images where model.index >= 0 {
+            guard let imageView = contentView.viewWithTag(model.index) as? UIImageView else {
+                let newImageView = UIImageView(image: model.image)
+                newImageView.contentMode = .scaleAspectFill
+                newImageView.clipsToBounds = true
+                newImageView.isUserInteractionEnabled = true
+                newImageView.tag = model.index
 
-        return contentView
+                let tap = UITapGestureRecognizer(target: context.coordinator, action: #selector(Coordinator.imageTapped(_:)))
+                newImageView.addGestureRecognizer(tap)
+                contentView.addSubview(newImageView)
+
+                continue
+            }
+
+            imageView.image = model.image
+        }
+
+        for model in images where model.index >= 0 {
+            if let imageView = contentView.viewWithTag(model.index) as? UIImageView {
+                imageView.frame = CGRect(origin: itemOrigin(at: model.index), size: Layout.itemSize)
+            }
+        }
+
+        let rows = (images.count + Layout.numberOfColumns - 1) / Layout.numberOfColumns
+        let contentWidth = CGFloat(Layout.numberOfColumns) * (Layout.itemSize.width + Layout.spacing) - Layout.spacing
+        let contentHeight = CGFloat(rows) * (Layout.itemSize.height + Layout.spacing) - Layout.spacing
+        contentView.frame = CGRect(x: 0, y: 0, width: contentWidth, height: max(contentHeight, 0.01))
     }
-    
+
     class Coordinator: NSObject, UIScrollViewDelegate {
         var onScrollToBottom: () -> Void
         var onImageTap: (Int) -> Void
+        var onVisibleIndexChange: (Int) -> Void
+        private var isNearBottomSent = false
 
-        init(onScrollToBottom: @escaping () -> Void, onImageTap: @escaping (Int) -> Void) {
+        init(onScrollToBottom: @escaping () -> Void,
+             onImageTap: @escaping (Int) -> Void,
+             onVisibleIndexChange: @escaping (Int) -> Void) {
             self.onScrollToBottom = onScrollToBottom
             self.onImageTap = onImageTap
+            self.onVisibleIndexChange = onVisibleIndexChange
         }
 
         func scrollViewDidScroll(_ scrollView: UIScrollView) {
@@ -88,8 +106,20 @@ struct ImageScrollViewRepresentable: UIViewRepresentable {
             let contentHeight = scrollView.contentSize.height
             let visibleHeight = scrollView.frame.height
 
-            if offsetY > contentHeight - visibleHeight - 100 {
-                onScrollToBottom()
+            let itemHeight = UIScreen.main.bounds.height * 0.2 + Layout.spacing
+            let rowHeight = max(itemHeight, 1)
+            let row = Int((offsetY + visibleHeight / 2) / rowHeight)
+            let visibleIndex = max(0, row * Layout.numberOfColumns)
+            onVisibleIndexChange(visibleIndex)
+
+            let shouldLoadMore = offsetY > contentHeight - visibleHeight - 100
+            if shouldLoadMore {
+                if !isNearBottomSent {
+                    isNearBottomSent = true
+                    onScrollToBottom()
+                }
+            } else {
+                isNearBottomSent = false
             }
         }
 

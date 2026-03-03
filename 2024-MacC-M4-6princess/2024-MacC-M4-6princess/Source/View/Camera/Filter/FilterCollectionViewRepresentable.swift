@@ -32,15 +32,23 @@ struct FilterCollectionViewRepresentable: UIViewControllerRepresentable {
             selectedFilter: { [viewContext] uuid in
                 // 선택된 필터의 이미지 데이터를 가져와서 설정
                 if let uuid = uuid {
+                    if let cached = FilterImageCache.shared.image(for: uuid) {
+                        DispatchQueue.main.async {
+                            frameManager.selectedFrame = uuid
+                            frameManager.resultImage = cached
+                        }
+                        return
+                    }
+
                     let fetchRequest: NSFetchRequest<StoreImages> = StoreImages.fetchRequest()
                     fetchRequest.predicate = NSPredicate(format: "uuid == %@", uuid as CVarArg)
                     fetchRequest.fetchLimit = 1
-                    
+
                     do {
                         let results = try viewContext.fetch(fetchRequest)
                         if let storedImage = results.first,
                            let imageData = storedImage.image,
-                           let uiImage = UIImage(data: imageData) {
+                           let uiImage = FilterImageCache.shared.image(for: uuid, data: imageData) {
                             DispatchQueue.main.async {
                                 frameManager.selectedFrame = uuid
                                 frameManager.resultImage = uiImage
@@ -116,10 +124,17 @@ struct FilterCollectionViewRepresentable: UIViewControllerRepresentable {
         fetchRequest.predicate = NSPredicate(format: "uuid == %@", frameId as CVarArg)
         fetchRequest.fetchLimit = 1
         
+        if let cached = FilterImageCache.shared.image(for: frameId) {
+            frameManager.resultImage = cached
+            return
+        }
+
         do {
             let results = try viewContext.fetch(fetchRequest)
-            if let storedImage = results.first, let imageData = storedImage.image {
-                frameManager.resultImage = UIImage(data: imageData)
+            if let storedImage = results.first,
+               let imageData = storedImage.image,
+               let uiImage = FilterImageCache.shared.image(for: frameId, data: imageData) {
+                frameManager.resultImage = uiImage
             } else {
                 frameManager.resultImage = nil
             }

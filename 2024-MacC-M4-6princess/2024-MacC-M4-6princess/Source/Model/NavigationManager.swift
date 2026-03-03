@@ -26,6 +26,7 @@ public final class NavigationManager: ObservableObject {
     /// 네비게이션 스택에서 마지막 화면 제거
     @MainActor
     public func pop() {
+        guard !route.isEmpty else { return }
         route.removeLast()
     }
     
@@ -33,12 +34,14 @@ public final class NavigationManager: ObservableObject {
     /// - Parameter depth: 제거할 화면의 개수
     @MainActor
     public func pop(depth: Int) {
+        guard depth > 0, route.count >= depth else { return }
         route.removeLast(depth)
     }
     
     /// 네비게이션 스택을 초기화하여 루트로 이동
     @MainActor
     public func popToRoot() {
+        guard !route.isEmpty else { return }
         route.removeLast(route.count)
     }
     
@@ -99,7 +102,11 @@ struct DFTestFrameView:View{
     @EnvironmentObject var frameManager:FrameManager
     var body: some View{
         ZStack{
-            Image(uiImage:frameManager.resultImage!)
+            if let image = frameManager.resultImage {
+                Image(uiImage: image)
+            } else {
+                Text("이미지를 불러오지 못했습니다")
+            }
         }
     }
 }

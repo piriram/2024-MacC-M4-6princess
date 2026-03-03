@@ -7,3 +7,4 @@
 */
 "NSPhotoLibraryUsageDescription" = "使用此應用程式需要存取相簿。";
 "NSCameraUsageDescription" = "使用此應用程式需要存取相機。";
+"NSPhotoLibraryAddUsageDescription" = "此應用程式需要存取照片庫來儲存已編輯的影像。";

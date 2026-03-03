@@ -50,7 +50,8 @@ extension FrameManager {
 
 
     func updateFrame(withId id: UUID, imageData: Data?) {
-        guard let data = imageData, let uiImage = UIImage(data: data) else { return }
+        guard let data = imageData,
+              let uiImage = SafeImageDecoder.decodeImage(from: data) else { return }
         self.updateFrame = id
         self.pickedImage = uiImage
         self.isFrameLoading = true

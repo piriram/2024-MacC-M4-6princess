@@ -17,6 +17,8 @@ class FilterCollectionViewController: UIViewController, UICollectionViewDelegate
     var filterImages: [StoreImages]
     private var selectedFilter: ((UUID?) -> Void)?
     private var shutterButton: UIButton!
+    private var shutterCenterYConstraint: NSLayoutConstraint?
+    private let imageCache = FilterImageCache.shared
     
     var currentSelectedFilter: UUID? {
         didSet {
@@ -120,12 +122,24 @@ class FilterCollectionViewController: UIViewController, UICollectionViewDelegate
         shutterButton.addTarget(self, action: #selector(shutterButtonTapped), for: .touchUpInside)
         
         view.addSubview(shutterButton)
-        NSLayoutConstraint.activate([
-            shutterButton.centerXAnchor.constraint(equalTo: view.centerXAnchor),
-            shutterButton.centerYAnchor.constraint(equalTo: collectionView.centerYAnchor)
-        ])
+        shutterCenterYConstraint = shutterButton.centerYAnchor.constraint(equalTo: collectionView.centerYAnchor)
+
+        var constraints: [NSLayoutConstraint] = [
+            shutterButton.centerXAnchor.constraint(equalTo: view.centerXAnchor)
+        ]
+
+        if let shutterCenterYConstraint {
+            constraints.append(shutterCenterYConstraint)
+        }
+
+        NSLayoutConstraint.activate(constraints)
         
         view.bringSubviewToFront(shutterButton)
+    }
+
+    func setShutterVerticalOffset(_ offset: CGFloat) {
+        shutterCenterYConstraint?.constant = offset
+        view.layoutIfNeeded()
     }
     
     
@@ -149,7 +163,7 @@ class FilterCollectionViewController: UIViewController, UICollectionViewDelegate
                     return cell
                 }
                 
-                if let imageData = filter.image, let uiImage = UIImage(data: imageData) {
+                if let uiImage = imageForFilter(filter) {
                     let isSelected = uuid == currentSelectedFilter
                     cell.configure(with: uiImage, size: 0, isSelected: isSelected)
                 } else {
@@ -239,10 +253,7 @@ class FilterCollectionViewController: UIViewController, UICollectionViewDelegate
                 // 상태 업데이트 순서 변경
                 currentSelectedFilter = uuid
                 frameManager.selectedFrame = uuid
-                
-                if let imageData = selectedFilter.image {
-                    frameManager.resultImage = UIImage(data: imageData)
-                }
+                frameManager.resultImage = imageForFilter(selectedFilter)
                 
                 // 마지막으로 콜백 호출
                 self.selectedFilter?(uuid)
@@ -283,7 +294,7 @@ class FilterCollectionViewController: UIViewController, UICollectionViewDelegate
                 let filterIndex = cellIndexPath.item - 1
                 if filterIndex >= 0 && filterIndex < filterImages.count {
                     let filter = filterImages[filterIndex]
-                    if let imageData = filter.image, let uiImage = UIImage(data: imageData) {
+                    if let uiImage = imageForFilter(filter) {
                         let isSelected = filter.uuid == currentSelectedFilter
                         filterCell.configure(with: uiImage, size: 0, isSelected: isSelected)
                     }
@@ -314,12 +325,23 @@ class FilterCollectionViewController: UIViewController, UICollectionViewDelegate
     }
     
     func addNewFilter(_ newFilter: StoreImages) {
+        if let uuid = newFilter.uuid,
+           let data = newFilter.image,
+           let image = imageCache.image(for: uuid, data: data) {
+            imageCache.setImage(image, for: uuid)
+        }
+
         filterImages.append(newFilter)
         collectionView.reloadData()
         collectionView.collectionViewLayout.invalidateLayout()
         
         let newestIndexPath = IndexPath(item: 1, section: 0)
         collectionView.scrollToItem(at: newestIndexPath, at: .centeredHorizontally, animated: true)
+    }
+
+    private func imageForFilter(_ filter: StoreImages) -> UIImage? {
+        guard let uuid = filter.uuid else { return nil }
+        return imageCache.image(for: uuid, data: filter.image)
     }
     
     
@@ -328,16 +350,20 @@ class FilterCollectionViewController: UIViewController, UICollectionViewDelegate
             showAlert(message: "프레임이 선택되지 않았습니다. 프레임을 선택해주세요!")
             return
         }
-        
-        if frameManager.resultImage != nil {
-            viewModel.isTakePic = true
-            DispatchQueue.main.asyncAfter(deadline: DispatchTime.now() + viewModel.delayTime) {
-                self.viewModel.takePic()
-                self.viewModel.cameraManager.stopSession()
-                Analytics.logEvent("A1_셔터버튼눌림", parameters: nil)
-            }
-        } else {
+
+        guard let frameSnapshot = frameManager.resultImage else {
             showAlert(message: "프레임이 선택되지 않았습니다. 프레임을 선택해주세요!")
+            return
+        }
+
+        guard viewModel.beginCapture(frameSnapshot: frameSnapshot) else {
+            return
+        }
+
+        viewModel.isTakePic = true
+        DispatchQueue.main.asyncAfter(deadline: DispatchTime.now() + viewModel.delayTime) {
+            self.viewModel.takePic()
+            Analytics.logEvent("A1_셔터버튼눌림", parameters: nil)
         }
     }
     

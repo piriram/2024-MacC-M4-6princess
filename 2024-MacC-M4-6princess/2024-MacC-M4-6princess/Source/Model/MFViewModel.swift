@@ -1,10 +1,3 @@
-//
-//  MFViewModel.swift
-//  2024-MacC-M4-6princess
-//
-//  Created by 김이예은 on 11/19/24.
-//
-
 import SwiftUI
 import CoreData
 
@@ -16,112 +9,90 @@ class MFViewModel: ObservableObject {
     @Published var isDeleteAlert: Bool = false
     @Published var isDeleteAlertDetail: Bool = false
     @Published var isShowMFDetailView: Bool = false
-    
-    //    private var viewContext: NSManagedObjectContext
+
     private var imageCache: [UUID: Data] = [:]
-    private var viewContext: NSManagedObjectContext
-    
-    init(context: NSManagedObjectContext) {
-        self.viewContext = context
+    private let storeImageService: StoreImagePersisting
+
+    init(context: NSManagedObjectContext, storeImageService: StoreImagePersisting? = nil) {
+        self.storeImageService = storeImageService ?? StoreImagePersistenceService(context: context)
     }
-    
-    //    init(context: NSManagedObjectContext, frameManager: FrameManager) {
-    //        self.viewContext = context
-    //        self.frameManager = frameManager
-    //    }
-    //
-    
-    ///코어데이터에서 이미지 id를 가져옴
+
+    /// 코어데이터에서 이미지 id를 가져옴
     func loadImages() {
-        let request = StoreImages.fetchRequest()
-        request.sortDescriptors = [NSSortDescriptor(keyPath: \StoreImages.createdDate, ascending: true)]
-        
         do {
-            let storedImages = try viewContext.fetch(request)
-            imageDataArray = storedImages.compactMap { storeImage in
-                guard let id = storeImage.uuid else { return nil }
-                return (id: id, data: Data(), isLoaded: false)
-            }
+            let records = try storeImageService.fetchRecords(sort: .createdDateAscending)
+            imageDataArray = records.map { (id: $0.id, data: Data(), isLoaded: false) }
         } catch {
             print("이미지 로드 실패: \(error)")
         }
     }
-    
-    ///특정 이미지가 필요할 때 로드(해당 Id가 없을 때만 로드)
+
+    /// 특정 이미지가 필요할 때 로드(해당 Id가 없을 때만 로드)
     func loadImageIfNeeded(for id: UUID) -> Data? {
         if let cached = imageCache[id] {
             return cached
         }
-        
+
         if let imageData = loadImageData(for: id) {
             imageCache[id] = imageData
             return imageData
         }
         return nil
     }
-    
-    ///특정 이미지 데이터를 가져옴
+
+    /// 특정 이미지 데이터를 가져옴
     func loadImageData(for id: UUID) -> Data? {
-        let request = StoreImages.fetchRequest()
-        request.predicate = NSPredicate(format: "uuid == %@", id as CVarArg)
-        
         do {
-            guard let storeImage = try viewContext.fetch(request).first,
-                  let imageData = storeImage.image else {
+            guard let imageData = try storeImageService.fetchImageData(for: id),
+                  let image = SafeImageDecoder.decodeImage(from: imageData),
+                  let downsampled = downsampleImage(
+                    image,
+                    to: CGSize(
+                        width: UIScreen.main.bounds.width / 3,
+                        height: (UIScreen.main.bounds.width / 3) * (4 / 3)
+                    )
+                  )?.pngData()
+            else {
                 return nil
             }
-            return downsampleImage(UIImage(data: imageData)!,
-                                   to: CGSize(width: UIScreen.main.bounds.width / 3,
-                                              height: (UIScreen.main.bounds.width / 3) * (4 / 3)))?.pngData()
+            return downsampled
         } catch {
             print("이미지 로딩 실패: \(error)")
             return nil
         }
     }
-    
-    // 원본 이미지 데이터를 가져오는 함수 추가
+
+    /// 원본 이미지 데이터를 가져오는 함수
     func loadOriginalImageData(for id: UUID) -> Data? {
-        let request = StoreImages.fetchRequest()
-        request.predicate = NSPredicate(format: "uuid == %@", id as CVarArg)
-        
         do {
-            guard let storeImage = try viewContext.fetch(request).first,
-                  let imageData = storeImage.image else { return nil }
-            return imageData // 다운샘플링 없이 원본 그대로 반환
+            return try storeImageService.fetchImageData(for: id)
         } catch {
-            print("원본 이미지 로딩 실패:", error)
+            print("원본 이미지 로딩 실패: \(error)")
             return nil
         }
     }
-    
-    
-    ///선택된 이미지들을 코어데이터에서 삭제
+
+    /// 선택된 이미지들을 코어데이터에서 삭제
     func deleteSelectedImages() {
-        let request = StoreImages.fetchRequest()
-        request.predicate = NSPredicate(format: "uuid IN %@", selectedImageIds)
-        
         do {
-            let imagesToDelete = try viewContext.fetch(request)
-            for image in imagesToDelete {
-                viewContext.delete(image)
-            }
-            try viewContext.save()
+            try storeImageService.deleteImages(ids: selectedImageIds)
             loadImages()
             selectedImageIds.removeAll()
             isEditing = false
+            imageCache.removeAll()
         } catch {
             print("이미지 삭제 실패: \(error)")
         }
     }
-    
-    ///원본 이미지를 다운샘플링(메모리 줄이기)
+
+    /// 원본 이미지를 다운샘플링(메모리 줄이기)
     func downsampleImage(_ image: UIImage, to pointSize: CGSize) -> UIImage? {
         let imageSourceOptions = [kCGImageSourceShouldCache: false] as CFDictionary
         guard let data = image.pngData(),
               let imageSource = CGImageSourceCreateWithData(data as CFData, imageSourceOptions) else {
             return nil
         }
-        
+
         let maxDimensionInPixels = max(pointSize.width, pointSize.height) * UIScreen.main.scale
         let downsampleOptions = [
             kCGImageSourceCreateThumbnailFromImageAlways: true,
@@ -129,23 +100,22 @@ class MFViewModel: ObservableObject {
             kCGImageSourceCreateThumbnailWithTransform: true,
             kCGImageSourceThumbnailMaxPixelSize: maxDimensionInPixels
         ] as CFDictionary
-        
+
         guard let downsampledImage = CGImageSourceCreateThumbnailAtIndex(imageSource, 0, downsampleOptions) else {
             return nil
         }
-        
+
         return UIImage(cgImage: downsampledImage)
     }
-    
+
     /// 선택된 이미지의 인덱스를 반환
     func indexOfSelectedImage() -> Int? {
         guard let selectedId = selectedImageIds.first else { return nil }
         return imageDataArray.firstIndex(where: { $0.id == selectedId })?.advanced(by: 1)
     }
-    
+
     /// Core Data에 저장된 총 이미지 개수를 반환
     func totalImageCount() -> Int {
         return imageDataArray.count
     }
-    
 }

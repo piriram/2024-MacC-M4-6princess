@@ -15,7 +15,6 @@ struct MainTabView: View {
     @Environment(\.managedObjectContext) private var viewContext
     @State var selectedTab = 1
     var tabBarHeight: CGFloat = 76
-    @ObservedObject var viewModel = CameraViewModel()
     
     var body: some View {
         NavigationStack(path: $naviManager.route) {

@@ -28,7 +28,7 @@ struct FilteredCoreDataImageView: View {
     var body: some View {
         Group {
             if let imageData = fetchedImages.first?.image,
-               let uiImage = UIImage(data: imageData) {
+               let uiImage = FilterImageCache.shared.image(for: filterID, data: imageData) {
                 Image(uiImage: uiImage)
                     .resizable()
                     .scaledToFit()

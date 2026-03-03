@@ -11,6 +11,7 @@ import SwiftUI
 struct CameraTopView: View {
     @ObservedObject var viewModel: CameraViewModel
     @StateObject var motionManager = MotionManager()
+    @State var showDebugOptions = false
     
     var body: some View {
         if UIScreen.main.bounds.height/UIScreen.main.bounds.width > 2.0 {
@@ -29,14 +30,28 @@ struct CameraTopView: View {
                     
                 }
                 .padding(.trailing, 20)
+                #if DEBUG
+                Button {
+                    showDebugOptions = true
+                } label: {
+                    Image(systemName: "ladybug")
+                        .font(.system(size: 20))
+                        .foregroundStyle(.black)
+                }
+                .padding(.trailing, 16)
+                #endif
             }
             .frame(width: UIScreen.main.bounds.width, height: 46)
             .background(.white)
+            .sheet(isPresented: $showDebugOptions) {
+                CameraDebugOptionsView {
+                    viewModel.refreshRuntimeDependencies()
+                    viewModel.checkVideoAuthorization()
+                }
+            }
         }
         else{
             cameraIPadTopView
         }
     }
 }
-
-

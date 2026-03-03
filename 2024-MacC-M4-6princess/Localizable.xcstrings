@@ -224,6 +224,27 @@
         }
       }
     },
+    "Apply" : {
+
+    },
+    "Camera Preview" : {
+
+    },
+    "Camera Source" : {
+
+    },
+    "Cancel" : {
+
+    },
+    "Cutout Engine" : {
+
+    },
+    "Debug Testing" : {
+
+    },
+    "Enable Hit Test Log" : {
+
+    },
     "font.bold" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -347,6 +368,9 @@
         }
       }
     },
+    "Interaction Debug" : {
+
+    },
     "light" : {
       "localizations" : {
         "ar" : {
@@ -387,6 +411,9 @@
         }
       }
     },
+    "Logs tap location + hit-tested view, and whether the New Frame button area actually receives touch." : {
+
+    },
     "Off" : {
       "localizations" : {
         "ar" : {
@@ -420,6 +447,12 @@
           }
         }
       }
+    },
+    "Overlap Top Bar: preview starts from y=0 and can cover top area" : {
+
+    },
+    "Shutter Vertical" : {
+
     },
     "stickerTab.bubble" : {
       "extractionState" : "manual",
@@ -669,6 +702,18 @@
       }
     },
     "Title" : {
+
+    },
+    "Top Bar Placement" : {
+
+    },
+    "Top Overflow: shutter top is 4pt above bottom bar. Center Y: shutter is centered vertically in filter area." : {
+
+    },
+    "Vertical Placement" : {
+
+    },
+    "가져오기 품질" : {
 
     },
     "갤러리에 저장되었습니다" : {
@@ -1079,6 +1124,9 @@
         }
       }
     },
+    "사진 접근 권한이 필요해요." : {
+
+    },
     "사진 촬영" : {
       "localizations" : {
         "ar" : {
@@ -1317,6 +1365,9 @@
         }
       }
     },
+    "설정 > 개인정보 보호 및 보안 > 사진에서 접근 권한을 허용해 주세요." : {
+
+    },
     "세로 고정 권장" : {
       "localizations" : {
         "ar" : {
@@ -1521,6 +1572,9 @@
         }
       }
     },
+    "앨범에 사진이 없거나 접근 가능한 사진이 없습니다.\n시뮬레이터라면 Photos 앱에 이미지를 먼저 추가해 주세요." : {
+
+    },
     "없어짐" : {
       "localizations" : {
         "ar" : {
@@ -1554,6 +1608,9 @@
           }
         }
       }
+    },
+    "오류" : {
+
     },
     "오류 발생" : {
       "localizations" : {
@@ -1724,6 +1781,9 @@
           }
         }
       }
+    },
+    "이미지를 불러오지 못했습니다" : {
+
     },
     "저장" : {
       "localizations" : {
@@ -2098,6 +2158,9 @@
           }
         }
       }
+    },
+    "표시할 사진이 없어요." : {
+
     },
     "프레임 관리" : {
       "localizations" : {

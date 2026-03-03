@@ -7,3 +7,4 @@
 */
 "NSPhotoLibraryUsageDescription" = "Photo library access is required to use this app.";
 "NSCameraUsageDescription" = "Camera access is required to use this app.";
+"NSPhotoLibraryAddUsageDescription" = "This app needs photo library access to save your edited image.";
