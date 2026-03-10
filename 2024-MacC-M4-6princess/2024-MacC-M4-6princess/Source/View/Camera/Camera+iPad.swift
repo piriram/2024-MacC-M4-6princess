@@ -69,8 +69,6 @@ extension CameraBottomView {
                             Image("newFrameIcon")
                                 .resizable()
                                 .frame(width: 40, height: 40)
-                                .rotationEffect(motionManager.rotationAngle(for: motionManager.currentOrientation))
-                                .animation(.easeInOut, value: motionManager.currentOrientation)
                             Text("새 프레임")
                                 .font(.caption)
                                 .multilineTextAlignment(.center)
