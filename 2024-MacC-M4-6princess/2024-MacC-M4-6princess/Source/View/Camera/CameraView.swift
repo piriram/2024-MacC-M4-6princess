@@ -261,6 +261,7 @@ private final class CameraUIKitViewController: UIViewController, UIGestureRecogn
     private var filterOverlayHostingController: UIHostingController<AnyView>?
 
     private var previewHeightConstraint: Constraint?
+    private var previewWidthConstraint: Constraint?
     private var previewBottomConstraint: Constraint?
     private var bottomHeightConstraint: Constraint?
     private var bottomOverlayTopInsetConstraint: Constraint?
@@ -563,7 +564,8 @@ private final class CameraUIKitViewController: UIViewController, UIGestureRecogn
 
         previewContainerView.snp.makeConstraints { make in
             previewBottomConstraint = make.bottom.equalTo(bottomContainerView.snp.top).constraint
-            make.leading.trailing.equalToSuperview()
+            make.centerX.equalToSuperview()
+            previewWidthConstraint = make.width.equalToSuperview().constraint
             previewHeightConstraint = make.height.equalTo(0).constraint
         }
     }
@@ -647,20 +649,22 @@ private final class CameraUIKitViewController: UIViewController, UIGestureRecogn
 
         // [iPhone 기준] SnapKit 레이아웃 정합 규칙
         // 1) top: 46pt
-        // 2) preview: 화면폭 전체, 높이 = width * ratio
+        // 2) preview: 화면폭 전체를 기본으로 하되, 화면 세로 여백을 넘지 않도록 안전하게 축소
         // 3) bottom: 셔터(80) + 상/하 패딩 기반 높이(상단 4pt 오버랩 정책 반영)
         // 4) zoom: bottom top - 20pt
-        let isPhone = UIDevice.current.userInterfaceIdiom == .phone
-        let effectiveTall = isPhone ? isTallScreen : isTallScreen
+        let effectiveTall = isTallScreen
 
-        let previewWidth: CGFloat = bounds.width
-        let previewHeight: CGFloat = previewWidth * ratio
         let bottomHeight: CGFloat = bottomBarHeight(isTallScreen: effectiveTall)
+        let availablePreviewHeight = max(0, bounds.height - topContainerHeight - bottomHeight)
+        let previewHeightFromWidth = bounds.width * ratio
+        let previewHeight = min(previewHeightFromWidth, availablePreviewHeight)
+        let previewWidth: CGFloat = ratio > 0 ? previewHeight / ratio : bounds.width
         let filterTopInset: CGFloat = effectiveTall ? 20 : 0
         let requiredHeight = previewHeight + bottomHeight + topContainerHeight
         let needsTopTransparent = requiredHeight > bounds.height
         applyTopBarBackground(isTransparent: needsTopTransparent)
 
+        previewWidthConstraint?.update(offset: previewWidth)
         previewHeightConstraint?.update(offset: previewHeight)
         previewBottomConstraint?.update(offset: 0)
         bottomHeightConstraint?.update(offset: bottomHeight)

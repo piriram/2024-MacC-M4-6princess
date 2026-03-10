@@ -10,70 +10,61 @@ import FirebaseAnalytics
 
 //메인뷰 하단 뷰(셔터버튼, 기타 버튼 등)
 struct CameraBottomView: View {
-    @Environment(\.horizontalSizeClass) var horizontalSizeClass
     @EnvironmentObject var naviManager: NavigationManager
     @EnvironmentObject var frameManager: FrameManager
     @EnvironmentObject var imageModel: ImageListModel
     @ObservedObject var viewModel: CameraViewModel
-    @StateObject var motionManager = MotionManager()
-    
-    // ✅ 여기서 미리 생성해두고 재사용하기!
-    private var filteredImageView : some View {
-        FilteredImageView(viewModel: viewModel)
-            .environmentObject(frameManager)
-            .environmentObject(imageModel)
-            .frame(height: 111)
-    }
+
     
     var body: some View {
-        
-        if UIScreen.main.bounds.height/UIScreen.main.bounds.width > 2.0 {
-            VStack{
-//                Spacer()
-//                Spacer()
-                ZStack(alignment: .center) {
-                    filteredImageView
-                    HStack {
-                        //새 프레임 만들기 버튼
-                        Button {
-                            naviManager.push(screen: Screen.photoPicker)
-                            
-                        } label: {
-                            VStack(alignment: .center, spacing: 4) {
-                                Image("newFrameIcon")
-                                    .resizable()
-                                    .frame(width: 50, height: 50)
-                                    .shadow(
-                                        color: .white,
-                                        radius: 10,
-                                        x: 20, y: 0)
-                                Text(String(localized:"새 프레임"))
-                                    .font(.caption)
-                                    .multilineTextAlignment(.center)
-                                    .lineLimit(2)
-                                    .minimumScaleFactor(0.7)
-                                    .foregroundColor(.black)
-                            }
+        let isTallScreen = UIScreen.main.bounds.height / UIScreen.main.bounds.width > 2.0
+        let buttonSize = isTallScreen ? CGSize(width: 70, height: 80) : CGSize(width: 56, height: 56)
+        let iconSize: CGFloat = isTallScreen ? 50 : 40
+        let containerHeight: CGFloat = isTallScreen ? 111 : 60
+        let frameHeight: CGFloat = isTallScreen ? 111 : 60
+        let filteredHeight: CGFloat = isTallScreen ? 111 : 124
+        let filterTopPadding: CGFloat = isTallScreen ? 20 : 0
+
+        VStack {
+            ZStack(alignment: .center) {
+                FilteredImageView(viewModel: viewModel)
+                    .environmentObject(frameManager)
+                    .environmentObject(imageModel)
+                    .frame(height: filteredHeight)
+                HStack {
+                    Button {
+                        naviManager.push(screen: Screen.photoPicker)
+                    } label: {
+                        VStack(alignment: .center, spacing: 4) {
+                            Image("newFrameIcon")
+                                .resizable()
+                                .frame(width: iconSize, height: iconSize)
+                                .shadow(
+                                    color: .white,
+                                    radius: 10,
+                                    x: 20, y: 0)
+                            Text(String(localized:"새 프레임"))
+                                .font(.caption)
+                                .multilineTextAlignment(.center)
+                                .lineLimit(2)
+                                .minimumScaleFactor(0.7)
+                                .foregroundColor(.black)
                         }
-                        .padding(.leading, 20)
-                        .frame(width: 70, height: 80)
-                        .background(.white)
-                        
-                        Spacer()
                     }
-                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .center)
+                    .padding(.leading, 20)
+                    .frame(width: buttonSize.width, height: buttonSize.height)
+                    .background(.white)
+
+                    Spacer()
                 }
-                .padding(.top, 20)
-//                .padding(.bottom, 24)
-                .frame(height: 111)
-                
+                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .center)
             }
-            .frame(width: UIScreen.main.bounds.width, height: 111)
-            .background(.white)
+            .padding(.top, filterTopPadding)
+            .frame(height: containerHeight)
+
         }
-        else {
-            cameraIPadBottomView
-        }
+        .frame(width: UIScreen.main.bounds.width, height: frameHeight)
+        .background(.white)
     }
 }
 
